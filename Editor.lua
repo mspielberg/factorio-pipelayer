@@ -7,7 +7,7 @@ local player_state
 
 function M.on_init()
   if not game.surfaces[surface_name] then
-    global.surface = game.create_surface(surface_name)
+    game.create_surface(surface_name)
   end
   if not global.player_state then
     global.player_state = {}
@@ -16,7 +16,6 @@ function M.on_init()
 end
 
 function M.on_load()
-  M.surface = global.surface
   player_state = global.player_state
 end
 
@@ -27,18 +26,6 @@ function M.has_active_players()
     end
   end
   return false
-end
-
-local function activate()
-  for _, entity in ipairs(game.surfaces[surface_name].find_entities()) do
-    entity.active = true
-  end
-end
-
-local function deactivate()
-  for _, entity in ipairs(game.surfaces[surface_name].find_entities()) do
-    entity.active = false
-  end
 end
 
 local function get_player_pipe_stacks(player)
@@ -61,9 +48,6 @@ local function get_player_pipe_stacks(player)
 end
 
 local function move_player_to_editor(player)
-  if not M.has_active_players() then
-    activate()
-  end
   local pipe_stacks = get_player_pipe_stacks(player)
   local player_index = player.index
   player_state[player_index] = {
@@ -86,9 +70,6 @@ local function return_player_from_editor(player)
   player.teleport(player_state[player_index].position, player_state[player_index].surface)
   player.character = player_state[player_index].character
   player_state[player_index] = nil
-  if not M.has_active_players() then
-    deactivate()
-  end
 end
 
 function M.toggle_editor_status_for_player(player_index)
@@ -127,9 +108,10 @@ function M.on_built_entity(event)
 
   local character = player_state[player_index].character
   if character then
-    local removed = character.remove_item(event.stack)
-    game.print("removed "..removed.." "..event.stack.name)
+    character.remove_item(event.stack)
   end
+
+  event.built_entity.active = false
 end
 
 function M.on_player_mined_entity(event)
