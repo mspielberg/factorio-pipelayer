@@ -21,15 +21,6 @@ function M.on_load()
   player_state = global.player_state
 end
 
-function M.has_active_players()
-  for _, player in pairs(game.players) do
-    if player.connected and player.surface.name == surface_name then
-      return true
-    end
-  end
-  return false
-end
-
 local function get_player_pipe_stacks(player)
   local stacks = {}
   for _, inventory_index in ipairs{defines.inventory.player_quickbar, defines.inventory.player_main} do
@@ -97,6 +88,7 @@ function M.on_chunk_generated(event)
     end
   end
   surface.set_tiles(tiles)
+  surface.destroy_decoratives(area)
 
   for _, entity in ipairs(surface.find_entities(area)) do
     entity.destroy()
@@ -144,6 +136,7 @@ local function abort_player_build(player, entity)
   player.insert({name = entity.name, count = 1})
   entity.surface.create_entity{
     name = "flying-text",
+    position = entity.position,
     text = {"plumbing-error.underground-obstructed"},
   }
   entity.destroy()
@@ -168,28 +161,9 @@ local function player_built_surface_via(player, entity)
     underground_via.active = false
     underground_via.minable = false
     local network = connect_underground_pipe(underground_via)
-    network:add_via(entity)
+    network:add_via(entity, underground_via.unit_number)
   end
 end
-
---[[
-local function player_built_underground_via(player, entity)
-  local nauvis = game.surfaces["nauvis"]
-  local create_args = {
-    name = "plumbing-via",
-    position = entity.position,
-    direction = entity.direction,
-    force = entity.force,
-  }
-  if not nauvis.can_place_entity(create_args) then
-    abort_player_build(player, entity)
-  else
-    local surface_via = nauvis.create_entity(create_args)
-    local network = connect_underground_pipe(entity)
-    network:add_via(surface_via)
-  end
-end
-]]
 
 local function player_built_underground_pipe(player_index, entity, stack)
     local character = player_state[player_index].character
@@ -209,8 +183,6 @@ function M.on_player_built_entity(event)
   if entity.name == "plumbing-via" then
     if surface.name == "nauvis" then
       player_built_surface_via(player, entity)
-    -- elseif surface.name == surface_name then
-    --   player_built_underground_via(player, entity)
     else
       abort_player_build(player, entity, {"plumbing-error.bad-surface"})
     end
@@ -224,15 +196,12 @@ local function mined_surface_via(entity)
   local network = Network.for_entity(underground_via)
   if network then
     network:remove_underground_pipe(underground_via)
-    network:remove_via(entity)
   end
   underground_via.destroy()
 end
 
-local function mined_underground_via(entity)
-end
-
-local function return_to_character_inventory(character, buffer)
+local function return_to_character_inventory(player_index, character, buffer)
+  local player = game.players[player_index]
   for i=1,#buffer do
     local stack = buffer[i]
     if stack.valid_for_read then
@@ -256,7 +225,7 @@ local function player_mined_from_editor(event)
   end
   local character = player_state[event.player_index].character
   if character then
-    return_to_character_inventory(character, event.buffer)
+    return_to_character_inventory(event.player_index, character, event.buffer)
   end
 end
 
@@ -266,8 +235,8 @@ function M.on_player_mined_entity(event)
   local surface = entity.surface
   if surface.name == surface_name then
     player_mined_from_editor(event)
-  elseif surface.name == "nauvis" then
-    mined_from_overworld(event)
+  elseif surface.name == "nauvis" and entity.name == "plumbing-via" then
+    mined_surface_via(entity)
   end
 
 end

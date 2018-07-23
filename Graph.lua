@@ -1,6 +1,8 @@
+local M = {}
+
 local Graph = {}
 
-function Graph.new()
+function M.new()
   local self = {}
   return setmetatable(self, { __index = Graph })
 end
@@ -34,6 +36,21 @@ local function dfs(self, node, visited)
   return visited
 end
 
+--[[
+  Computes the disjoint graphs that would result from removing the specified node.
+  Returns an array (possibly of length 1) of sets of nodes:
+  {
+    {
+      [node1] = true,
+      [node3] = true,
+      ...
+    },
+    {
+      [node5] = true,
+      [node4] = true,
+    },
+  }
+]]
 function Graph:removal_fragments(node)
   local original_neighbors = {}
   for neighbor in pairs(self[node]) do
@@ -55,14 +72,15 @@ function Graph:removal_fragments(node)
   return fragments
 end
 
+-- Renders the Graph as a comma-separated list of directed edges
 function Graph:tostring()
   local out = ""
   for node in pairs(self) do
     for neighbor in pairs(self[node]) do
-      out = out..node.."->"..neighbor..", "
+      out = out..node.."->"..neighbor..","
     end
   end
   return out
 end
 
-return Graph
+return M

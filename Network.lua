@@ -51,7 +51,7 @@ end
       ...
     },
     vias = {
-      [unit_number] = via_aboveground_entity,
+      [underground_unit_number] = via_aboveground_entity,
       ...
     }
   }
@@ -79,10 +79,6 @@ function Network.for_entity(entity)
   return network_for_entity[entity.unit_number]
 end
 
-function Network:can_absorb(other_network)
-  return other_network.fluid_name == self.fluid_name or other_network.fluid_name == nil or self.fluid_name == nil
-end
-
 function Network:absorb(other_network)
   if not self.fluid_name then
     self.fluid_name = other_network.fluid_name
@@ -90,22 +86,19 @@ function Network:absorb(other_network)
   for _, entity in pairs(other_network.pipes) do
     self:add_underground_pipe(entity)
   end
-  for _, via in pairs(other_network.vias) do
-    self.vias[#self.vias+1] = via
+  for underground_unit_number, via in pairs(other_network.vias) do
+    self:add_via(via, underground_unit_number)
   end
   other_network:destroy()
+  self:set_fluid(self.fluid_name)
 end
 
-function Network:add_via(entity)
-  assert(entity.name == "plumbing-via")
-  assert(entity.surface.name == "nauvis")
-  self.vias[entity.unit_number] = entity
+function Network:add_via(above, below_unit_number)
+  self.vias[below_unit_number] = above
 end
 
-function Network:remove_via(entity)
-  assert(entity.name == "plumbing-via")
-  assert(entity.surface.name == "nauvis")
-  self.vias[entity.unit_number] = nil
+function Network:remove_via(below_unit_number)
+  self.vias[below_unit_number] = nil
 end
 
 function Network:add_underground_pipe(entity)
@@ -118,44 +111,36 @@ function Network:add_underground_pipe(entity)
     self.graph:add(unit_number, neighbor.unit_number)
   end
   fill_pipe(entity, self.fluid_name)
-  game.print("added pipe "..entity.unit_number.." to network "..self.id)
-end
-
-local function set_to_list(set)
-  local out = {}
-  for k in pairs(set) do
-    out[#out+1] = k
-  end
-  return out
 end
 
 function Network:remove_underground_pipe(entity)
-  game.print("before = "..self.graph:tostring())
   assert(entity.surface.name == surface_name)
   local unit_number = entity.unit_number
   self.pipes[unit_number] = nil
+  self:remove_via(unit_number)
   network_for_entity[unit_number] = nil
 
   local fragments = self.graph:removal_fragments(unit_number)
   for i=2,#fragments do
     local fragment = fragments[i]
     local split_network = Network.new()
-    game.print(serpent.block{
-      msg="created network "..split_network.id.." as split from "..self.id,
-      pipes=set_to_list(self.pipes),
-      fragment= fragment})
     for fragment_pipe_unit_number in pairs(fragment) do
       split_network:add_underground_pipe(self.pipes[fragment_pipe_unit_number])
+      if self.vias[fragment_pipe_unit_number] then
+        split_network:add_via(self.vias[fragment_pipe_unit_number], fragment_pipe_unit_number)
+        self:remove_via(fragment_pipe_unit_number)
+      end
       network_for_entity[fragment_pipe_unit_number] = split_network
       self.pipes[fragment_pipe_unit_number] = nil
-      game.print("removing "..fragment_pipe_unit_number.." from graph")
       self.graph:remove(fragment_pipe_unit_number)
     end
     split_network.graph:remove(unit_number)
+    split_network:update()
   end
   self.graph:remove(unit_number)
-  game.print("after = "..self.graph:tostring())
-  if not next(self.pipes) then
+  if next(self.pipes) then
+    self:update()
+  else
     self:destroy()
   end
 end
@@ -200,37 +185,53 @@ function Network:foreach_underground_entity(callback)
   end
 end
 
+local function foreach_via(self, callback)
+  for k, via in pairs(self.vias) do
+    if via.valid then
+      callback(via)
+    else
+      self.vias[k] = nil
+    end
+  end
+end
+
 function Network:set_fluid(fluid_name)
-  game.print("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
+  log("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   self:foreach_underground_entity(function(entity)
     fill_pipe(entity, self.fluid_name)
   end)
   local surface = game.surfaces[surface_name]
-  for _, via in pairs(self.vias) do
+  foreach_via(self, function(via)
     local counterpart = surface.find_entity("plumbing-via", via.position)
     local fluidbox = via.fluidbox[1]
     if fluidbox and fluidbox.amount > 0 then
       fill_pipe(counterpart, via.fluidbox[1].name)
     end
-  end
+  end)
 end
 
 function Network:infer_fluid_from_vias()
   local inferred_fluid
-  for _, via in pairs(self.vias) do
+  local conflict
+  foreach_via(self, function(via)
     local via_fluidbox = via.fluidbox[1]
     if via_fluidbox then
       if inferred_fluid then
         if via_fluidbox.name ~= inferred_fluid then
-          return nil
+          conflict = true
+          return
         end
       else
         inferred_fluid = via_fluidbox.name
       end
     end
+  end)
+  if conflict then
+    return nil
+  else
+    return inferred_fluid
   end
-  return inferred_fluid
 end
 
 function Network:update()
