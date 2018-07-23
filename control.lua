@@ -20,5 +20,8 @@ end
 
 script.on_init(on_init)
 script.on_load(on_load)
+
+script.on_event(defines.events.on_built_entity, Editor.on_built_entity)
+script.on_event(defines.events.on_player_mined_entity, Editor.on_player_mined_entity)
 script.on_event("plumbing-toggle-editor-view", on_toggle_editor)
 script.on_event(defines.events.on_chunk_generated, on_chunk_generated)

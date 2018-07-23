@@ -120,4 +120,40 @@ function M.on_chunk_generated(event)
   end
 end
 
+function M.on_built_entity(event)
+  local player_index = event.player_index
+  local player = game.players[player_index]
+  if player.surface.name ~= surface_name then return end
+
+  local character = player_state[player_index].character
+  if character then
+    local removed = character.remove_item(event.stack)
+    game.print("removed "..removed.." "..event.stack.name)
+  end
+end
+
+function M.on_player_mined_entity(event)
+  local player_index = event.player_index
+  local player = game.players[player_index]
+  if player.surface.name ~= surface_name then return end
+
+  local character = player_state[player_index].character
+  if not character then return end
+
+  local buffer = event.buffer
+  for i=1,#buffer do
+    local stack = buffer[i]
+    if stack.valid_for_read then
+      local inserted = character.insert(stack)
+      if inserted < stack.count then
+        player.print({"inventory-restriction.player-inventory-full", stack.prototype.localised_name})
+        character.surface.spill_item_stack(
+          character.position,
+          {name = stack.name, count = stack.count - inserted})
+        stack.count = inserted
+      end
+    end
+  end
+end
+
 return M
