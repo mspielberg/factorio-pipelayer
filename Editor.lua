@@ -1,3 +1,5 @@
+local Network = require "Network"
+
 local M = {}
 
 local surface_name = "plumbing"
@@ -101,28 +103,136 @@ function M.on_chunk_generated(event)
   end
 end
 
-function M.on_built_entity(event)
-  local player_index = event.player_index
-  local player = game.players[player_index]
-  if player.surface.name ~= surface_name then return end
-
-  local character = player_state[player_index].character
-  if character then
-    character.remove_item(event.stack)
+local function set_to_list(set)
+  local out = {}
+  for k in pairs(set) do
+    out[#out+1] = k
   end
-
-  event.built_entity.active = false
+  return out
 end
 
-function M.on_player_mined_entity(event)
+local function connected_networks(entity)
+  local out = {}
+  for _, neighbor in ipairs(entity.neighbours[1]) do
+    local neighbor_network = Network.for_entity(neighbor)
+    out[neighbor_network] = true
+  end
+  return set_to_list(out)
+end
+
+local function connect_underground_pipe(entity)
+  local networks = connected_networks(entity)
+  if not next(networks) then
+    local network = Network:new()
+    game.print("created new network "..network.id)
+    network:add_underground_pipe(entity)
+    return network
+  end
+
+  local main_network = networks[1]
+  main_network:add_underground_pipe(entity)
+  for i=2,#networks do
+    local to_absorb = networks[i]
+    game.print("absorbing network "..to_absorb.id.." into network "..main_network.id)
+    main_network:absorb(to_absorb)
+    main_network:update()
+  end
+  return main_network
+end
+
+local function abort_player_build(player, entity)
+  player.insert({name = entity.name, count = 1})
+  entity.surface.create_entity{
+    name = "flying-text",
+    text = {"plumbing-error.underground-obstructed"},
+  }
+  entity.destroy()
+end
+
+local function opposite_direction(direction)
+  return (direction + 4) % 8
+end
+
+local function player_built_surface_via(player, entity)
+  local surface = game.surfaces[surface_name]
+  local create_args = {
+    name = "plumbing-via",
+    position = entity.position,
+    direction = opposite_direction(entity.direction),
+    force = entity.force,
+  }
+  if not surface.can_place_entity(create_args) then
+    abort_player_build(player, entity)
+  else
+    local underground_via = surface.create_entity(create_args)
+    underground_via.active = false
+    underground_via.minable = false
+    local network = connect_underground_pipe(underground_via)
+    network:add_via(entity)
+  end
+end
+
+--[[
+local function player_built_underground_via(player, entity)
+  local nauvis = game.surfaces["nauvis"]
+  local create_args = {
+    name = "plumbing-via",
+    position = entity.position,
+    direction = entity.direction,
+    force = entity.force,
+  }
+  if not nauvis.can_place_entity(create_args) then
+    abort_player_build(player, entity)
+  else
+    local surface_via = nauvis.create_entity(create_args)
+    local network = connect_underground_pipe(entity)
+    network:add_via(surface_via)
+  end
+end
+]]
+
+local function player_built_underground_pipe(player_index, entity, stack)
+    local character = player_state[player_index].character
+    if character then
+      character.remove_item(stack)
+    end
+    entity.active = false
+    connect_underground_pipe(entity)
+end
+
+function M.on_player_built_entity(event)
   local player_index = event.player_index
   local player = game.players[player_index]
-  if player.surface.name ~= surface_name then return end
+  local entity = event.created_entity
+  local surface = entity.surface
 
-  local character = player_state[player_index].character
-  if not character then return end
+  if entity.name == "plumbing-via" then
+    if surface.name == "nauvis" then
+      player_built_surface_via(player, entity)
+    -- elseif surface.name == surface_name then
+    --   player_built_underground_via(player, entity)
+    else
+      abort_player_build(player, entity, {"plumbing-error.bad-surface"})
+    end
+  elseif surface.name == surface_name then
+    player_built_underground_pipe(player_index, entity, event.stack)
+  end
+end
 
-  local buffer = event.buffer
+local function mined_surface_via(entity)
+  local underground_via = game.surfaces[surface_name].find_entity("plumbing-via", entity.position)
+  local network = Network.for_entity(underground_via)
+  if network then
+    network:remove_underground_pipe(underground_via)
+    network:remove_via(entity)
+  end
+  underground_via.destroy()
+end
+
+local function mined_underground_via(entity)
+end
+
+local function return_to_character_inventory(character, buffer)
   for i=1,#buffer do
     local stack = buffer[i]
     if stack.valid_for_read then
@@ -136,6 +246,30 @@ function M.on_player_mined_entity(event)
       end
     end
   end
+end
+
+local function player_mined_from_editor(event)
+  local entity = event.entity
+  local network = Network.for_entity(entity)
+  if network then
+    network:remove_underground_pipe(entity)
+  end
+  local character = player_state[event.player_index].character
+  if character then
+    return_to_character_inventory(character, event.buffer)
+  end
+end
+
+
+function M.on_player_mined_entity(event)
+  local entity = event.entity
+  local surface = entity.surface
+  if surface.name == surface_name then
+    player_mined_from_editor(event)
+  elseif surface.name == "nauvis" then
+    mined_from_overworld(event)
+  end
+
 end
 
 return M

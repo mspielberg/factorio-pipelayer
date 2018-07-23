@@ -55,4 +55,14 @@ function Graph:removal_fragments(node)
   return fragments
 end
 
+function Graph:tostring()
+  local out = ""
+  for node in pairs(self) do
+    for neighbor in pairs(self[node]) do
+      out = out..node.."->"..neighbor..", "
+    end
+  end
+  return out
+end
+
 return Graph

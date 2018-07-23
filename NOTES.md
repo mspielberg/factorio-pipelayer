@@ -5,3 +5,8 @@
 # TODO
 
 1. support multiple surfaces
+2. ghost handling
+
+# to test
+
+1. placing surface when underground is obstructed
