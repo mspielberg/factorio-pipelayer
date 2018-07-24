@@ -1,15 +1,16 @@
+local Constants = require "Constants"
 local Network = require "Network"
 
 local M = {}
 
-local surface_name = "plumbing"
-local tile_name = "dirt-6"
+local SURFACE_NAME = Constants.SURFACE_NAME
+local UNDERGROUND_TILE_NAME = Constants.UNDERGROUND_TILE_NAME
 
 local player_state
 
 function M.on_init()
-  if not game.surfaces[surface_name] then
-    game.create_surface(surface_name)
+  if not game.surfaces[SURFACE_NAME] then
+    game.create_surface(SURFACE_NAME)
   end
   if not global.player_state then
     global.player_state = {}
@@ -49,7 +50,7 @@ local function move_player_to_editor(player)
     character = player.character,
   }
   player.character = nil
-  player.teleport(player.position, surface_name)
+  player.teleport(player.position, SURFACE_NAME)
   for _, stack in ipairs(pipe_stacks) do
     player.insert(stack)
   end
@@ -67,7 +68,7 @@ end
 
 function M.toggle_editor_status_for_player(player_index)
   local player = game.players[player_index]
-  if player.surface.name == surface_name then
+  if player.surface.name == SURFACE_NAME then
     return_player_from_editor(player)
   elseif player.surface == game.surfaces.nauvis then
     move_player_to_editor(player)
@@ -77,14 +78,14 @@ function M.toggle_editor_status_for_player(player_index)
 end
 
 function M.on_chunk_generated(event)
-  if event.surface.name ~= surface_name then return end
+  if event.surface.name ~= SURFACE_NAME then return end
   local surface = event.surface
   local area = event.area
 
   local tiles = {}
   for y=area.left_top.y,area.right_bottom.y do
     for x=area.left_top.x,area.right_bottom.x do
-      tiles[#tiles+1] = {name = tile_name, position={x = x,y = y}}
+      tiles[#tiles+1] = {name = UNDERGROUND_TILE_NAME, position={x = x,y = y}}
     end
   end
   surface.set_tiles(tiles)
@@ -147,7 +148,7 @@ local function opposite_direction(direction)
 end
 
 local function player_built_surface_via(player, entity)
-  local surface = game.surfaces[surface_name]
+  local surface = game.surfaces[SURFACE_NAME]
   local create_args = {
     name = "plumbing-via",
     position = entity.position,
@@ -186,13 +187,13 @@ function M.on_player_built_entity(event)
     else
       abort_player_build(player, entity, {"plumbing-error.bad-surface"})
     end
-  elseif surface.name == surface_name then
+  elseif surface.name == SURFACE_NAME then
     player_built_underground_pipe(player_index, entity, event.stack)
   end
 end
 
 local function mined_surface_via(entity)
-  local underground_via = game.surfaces[surface_name].find_entity("plumbing-via", entity.position)
+  local underground_via = game.surfaces[SURFACE_NAME].find_entity("plumbing-via", entity.position)
   local network = Network.for_entity(underground_via)
   if network then
     network:remove_underground_pipe(underground_via)
@@ -233,7 +234,7 @@ end
 function M.on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
-  if surface.name == surface_name then
+  if surface.name == SURFACE_NAME then
     player_mined_from_editor(event)
   elseif surface.name == "nauvis" and entity.name == "plumbing-via" then
     mined_surface_via(entity)

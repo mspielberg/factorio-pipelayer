@@ -1,6 +1,7 @@
+local Constants = require 'Constants'
 local Graph = require "Graph"
 
-local surface_name = "plumbing"
+local SURFACE_NAME = Constants.SURFACE_NAME
 
 local pipe_capacity_cache = {}
 local function pipe_capacity(name)
@@ -102,7 +103,7 @@ function Network:remove_via(below_unit_number)
 end
 
 function Network:add_underground_pipe(entity)
-  assert(entity.surface.name == surface_name)
+  assert(entity.surface.name == SURFACE_NAME)
   local unit_number = entity.unit_number
   network_for_entity[unit_number] = self
   self.pipes[unit_number] = entity
@@ -114,7 +115,7 @@ function Network:add_underground_pipe(entity)
 end
 
 function Network:remove_underground_pipe(entity)
-  assert(entity.surface.name == surface_name)
+  assert(entity.surface.name == SURFACE_NAME)
   local unit_number = entity.unit_number
   self.pipes[unit_number] = nil
   self:remove_via(unit_number)
@@ -201,7 +202,7 @@ function Network:set_fluid(fluid_name)
   self:foreach_underground_entity(function(entity)
     fill_pipe(entity, self.fluid_name)
   end)
-  local surface = game.surfaces[surface_name]
+  local surface = game.surfaces[SURFACE_NAME]
   foreach_via(self, function(via)
     local counterpart = surface.find_entity("plumbing-via", via.position)
     local fluidbox = via.fluidbox[1]

@@ -1,3 +1,5 @@
+local Constants = require 'Constants'
+
 local empty_sprite = {
   filename = "__core__/graphics/empty.png",
   width = 0,
@@ -19,7 +21,7 @@ data:extend{
     collision_box = ug.collision_box,
     selection_box = ug.selection_box,
     fluid_box = {
-      base_area = 250,
+      base_area = Constants.VIA_CAPACITY / 100,
       pipe_covers = pipecoverspictures(),
       pipe_connections = {
         { position = {0, -1} },
