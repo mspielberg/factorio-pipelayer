@@ -51,8 +51,12 @@ end
 
 function M.get_connected_connection_type(entity, fluidbox_index)
   local other_fluidbox = entity.fluidbox.get_connections(fluidbox_index)[1]
-  local other_entity = other_fluidbox.owner
-  return get_connection_type(other_entity, entity.position)
+  if other_fluidbox then
+    local other_entity = other_fluidbox.owner
+    return get_connection_type(other_entity, entity.position)
+  else
+    return "input-output"
+  end
 end
 
 return M

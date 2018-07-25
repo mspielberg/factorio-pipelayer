@@ -1,5 +1,6 @@
-local Constants = require 'Constants'
+local Constants = require "Constants"
 local Graph = require "Graph"
+local PipeConnections = require "PipeConnections"
 
 local SURFACE_NAME = Constants.SURFACE_NAME
 
@@ -146,14 +147,49 @@ function Network:remove_underground_pipe(entity)
   end
 end
 
+local function foreach_via(self, callback)
+  for k, via in pairs(self.vias) do
+    if via.valid then
+      callback(via)
+    else
+      self.vias[k] = nil
+    end
+  end
+end
+
+-- returns amount of fluid left undistributed
+local function distribute(vias, fluid_name, fluid_amount, fluid_temperature)
+  local num_vias = #vias
+  local total_via_capacity = Constants.VIA_CAPACITY * num_vias
+  local total_to_distribute = fluid_amount
+  if total_to_distribute > total_via_capacity then
+    total_to_distribute = total_via_capacity
+  end
+
+  local amount_per_via = total_to_distribute / num_vias
+  for _, via in ipairs(vias) do
+    via.fluidbox[1] = {
+      name = fluid_name,
+      temperature = fluid_temperature,
+      amount = amount_per_via,
+    }
+  end
+
+  return fluid_amount - total_to_distribute
+end
+
 function Network:balance()
-  if not self.fluid_name then return end
+  local fluid_name = self.fluid_name
+  if not fluid_name then return end
 
   local total_amount = 0
   local total_temperature = 0
   local num_vias = 0
-  for unit_number, via in pairs(self.vias) do
-    if via.valid then
+  local output_vias = {}
+  local input_vias = {}
+  local other_vias = {}
+
+  foreach_via(self, function(via)
       local fluidbox = via.fluidbox[1]
       if fluidbox then
         local amount = fluidbox.amount
@@ -161,19 +197,22 @@ function Network:balance()
         total_temperature = total_temperature + amount * fluidbox.temperature
       end
       num_vias = num_vias + 1
-    else
-      self.vias[unit_number] = nil
-    end
-  end
 
-  local new_fluid = {
-    name = self.fluid_name,
-    amount = total_amount / num_vias,
-    temperature = total_temperature / total_amount,
-  }
-  for _, via in pairs(self.vias) do
-    via.fluidbox[1] = new_fluid
-  end
+      local type = PipeConnections.get_connected_connection_type(via, 1)
+      if type == "input" then
+        input_vias[#input_vias+1] = via
+      elseif type == "output" then
+        output_vias[#output_vias+1] = via
+      else
+        other_vias[#other_vias+1] = via
+      end
+  end)
+  local average_temp = total_temperature / num_vias
+
+  -- distribute fluid by priority
+  total_amount = distribute(input_vias, fluid_name, total_amount, average_temp)
+  total_amount = distribute(other_vias, fluid_name, total_amount, average_temp)
+  total_amount = distribute(output_vias, fluid_name, total_amount, average_temp)
 end
 
 function Network:foreach_underground_entity(callback)
@@ -186,16 +225,6 @@ function Network:foreach_underground_entity(callback)
   end
 end
 
-local function foreach_via(self, callback)
-  for k, via in pairs(self.vias) do
-    if via.valid then
-      callback(via)
-    else
-      self.vias[k] = nil
-    end
-  end
-end
-
 function Network:set_fluid(fluid_name)
   log("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
@@ -203,13 +232,17 @@ function Network:set_fluid(fluid_name)
     fill_pipe(entity, self.fluid_name)
   end)
   local surface = game.surfaces[SURFACE_NAME]
-  foreach_via(self, function(via)
-    local counterpart = surface.find_entity("plumbing-via", via.position)
-    local fluidbox = via.fluidbox[1]
-    if fluidbox and fluidbox.amount > 0 then
-      fill_pipe(counterpart, via.fluidbox[1].name)
-    end
-  end)
+
+  if not fluid_name then
+    -- make sure underground via counterparts reflect content of overworld
+    foreach_via(self, function(via)
+      local counterpart = surface.find_entity("plumbing-via", via.position)
+      local fluidbox = via.fluidbox[1]
+      if fluidbox and fluidbox.amount > 0 then
+        fill_pipe(counterpart, via.fluidbox[1].name)
+      end
+    end)
+  end
 end
 
 function Network:infer_fluid_from_vias()
