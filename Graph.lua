@@ -7,6 +7,10 @@ function M.new()
   return setmetatable(self, { __index = Graph })
 end
 
+function M.restore(graph)
+  setmetatable(graph, { __index = Graph })
+end
+
 -- add node with neighbors ...
 function Graph:add(node, ...)
   local neighbors = {...}

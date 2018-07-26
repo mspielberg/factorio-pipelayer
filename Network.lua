@@ -35,6 +35,7 @@ function Network.on_load()
   all_networks = global.all_networks
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
+    Graph.restore(network.graph)
     for unit_number, pipe in pairs(network.pipes) do
       if pipe.valid then
         network_for_entity[pipe.unit_number] = network
