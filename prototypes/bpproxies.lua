@@ -1,4 +1,4 @@
-local util = require "util"
+require "util"
 
 local function add_tint(proto, tint)
   local pictures
