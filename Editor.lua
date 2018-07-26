@@ -10,7 +10,25 @@ local player_state
 
 function M.on_init()
   if not game.surfaces[SURFACE_NAME] then
-    game.create_surface(SURFACE_NAME)
+    game.create_surface(
+      SURFACE_NAME,
+      {
+        starting_area = "none",
+        water = "none",
+        cliff_settings = { cliff_elevation_0 = 1024 },
+        default_enable_all_autoplace_controls = false,
+        autoplace_controls = {
+          dirt = {
+            frequency = "very-low",
+            size = "very-high",
+          },
+        },
+        autoplace_settings = {
+          decorative = { treat_missing_as_default = false },
+          entity = { treat_missing_as_default = false },
+        },
+      }
+    )
   end
   if not global.player_state then
     global.player_state = {}
@@ -74,25 +92,6 @@ function M.toggle_editor_status_for_player(player_index)
     move_player_to_editor(player)
   else
     player.print({"plumbing-error.bad-surface"})
-  end
-end
-
-function M.on_chunk_generated(event)
-  if event.surface.name ~= SURFACE_NAME then return end
-  local surface = event.surface
-  local area = event.area
-
-  local tiles = {}
-  for y=area.left_top.y,area.right_bottom.y do
-    for x=area.left_top.x,area.right_bottom.x do
-      tiles[#tiles+1] = {name = UNDERGROUND_TILE_NAME, position={x = x,y = y}}
-    end
-  end
-  surface.set_tiles(tiles)
-  surface.destroy_decoratives(area)
-
-  for _, entity in ipairs(surface.find_entities(area)) do
-    entity.destroy()
   end
 end
 
