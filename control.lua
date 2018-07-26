@@ -1,3 +1,4 @@
+local Blueprint = require "Blueprint"
 local Editor = require "Editor"
 local Network = require "Network"
 
@@ -17,6 +18,10 @@ local function on_built_entity(event)
   else
     Editor.on_player_built_entity(event)
   end
+end
+
+local function on_player_setup_blueprint(event)
+  Blueprint.on_player_setup_blueprint(event)
 end
 
 local function on_toggle_editor(event)
@@ -40,5 +45,6 @@ script.on_event({defines.events.on_built_entity, defines.events.on_robot_built_e
 script.on_event(defines.events.on_player_mined_entity, Editor.on_player_mined_entity)
 script.on_event(defines.events.on_entity_died, Editor.on_entity_died)
 script.on_event("plumbing-toggle-editor-view", on_toggle_editor)
+script.on_event(defines.events.on_player_setup_blueprint, on_player_setup_blueprint)
 
 script.on_nth_tick(60, on_tick)
