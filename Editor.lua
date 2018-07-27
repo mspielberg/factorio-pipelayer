@@ -9,7 +9,7 @@ local editor_surface
 local player_state
 
 local function debug(...)
-  game.print(...)
+  log(...)
 end
 
 function M.on_init()
@@ -116,13 +116,13 @@ local function connected_networks(entity)
   return set_to_list(out)
 end
 
-local function connect_underground_pipe(entity)
+ function M.connect_underground_pipe(entity)
+  debug(serpent.line{entity=entity,neighbours=entity.neighbours})
   local networks = connected_networks(entity)
   if not next(networks) then
     local network = Network:new()
     debug("created new network "..network.id)
     network:add_underground_pipe(entity)
-    network:update()
     return network
   end
 
@@ -150,7 +150,7 @@ local function opposite_direction(direction)
   return (direction + 4) % 8
 end
 
-local function player_built_surface_via(player, entity)
+local function built_surface_via(player, entity)
   local position = entity.position
   if not editor_surface.is_chunk_generated(position) then
     editor_surface.request_to_generate_chunks(position, 1)
@@ -163,14 +163,17 @@ local function player_built_surface_via(player, entity)
     force = entity.force,
   }
   if not editor_surface.can_place_entity(create_args) then
-    abort_player_build(player, entity)
+    if player then
+      abort_player_build(player, entity)
+    else
+      entity.order_deconstruction(entity.force)
+    end
   else
     local underground_via = editor_surface.create_entity(create_args)
     underground_via.active = false
     underground_via.minable = false
-    local network = connect_underground_pipe(underground_via)
+    local network = M.connect_underground_pipe(underground_via)
     network:add_via(entity, underground_via.unit_number)
-    network:update()
   end
 end
 
@@ -180,7 +183,7 @@ local function player_built_underground_pipe(player_index, entity, stack)
       character.remove_item(stack)
     end
     entity.active = false
-    connect_underground_pipe(entity)
+    M.connect_underground_pipe(entity)
 end
 
 function M.on_player_built_entity(event)
@@ -192,7 +195,7 @@ function M.on_player_built_entity(event)
 
   if entity.name == "plumbing-via" then
     if surface.name == "nauvis" then
-      player_built_surface_via(player, entity)
+      built_surface_via(player, entity)
     else
       abort_player_build(player, entity, {"plumbing-error.bad-surface"})
     end
@@ -201,12 +204,14 @@ function M.on_player_built_entity(event)
   end
 end
 
+function M.on_robot_built_entity(event)
+end
+
 local function mined_surface_via(entity)
   local underground_via = editor_surface.find_entity("plumbing-via", entity.position)
   local network = Network.for_entity(underground_via)
   if network then
     network:remove_underground_pipe(underground_via)
-    network:update()
   end
   underground_via.destroy()
 end
@@ -233,14 +238,12 @@ local function player_mined_from_editor(event)
   local network = Network.for_entity(entity)
   if network then
     network:remove_underground_pipe(entity)
-    network:update()
   end
   local character = player_state[event.player_index].character
   if character then
     return_to_character_inventory(event.player_index, character, event.buffer)
   end
 end
-
 
 function M.on_player_mined_entity(event)
   local entity = event.entity
@@ -265,12 +268,10 @@ function M.on_player_rotated_entity(event)
     old_network:remove_via(entity.unit_number)
   end
   old_network:remove_underground_pipe(entity)
-  old_network:update()
-  local new_network = connect_underground_pipe(entity)
+  local new_network = M.connect_underground_pipe(entity)
   if surface_via then
     new_network:add_via(surface_via, entity.unit_number)
   end
-  new_network:update()
 end
 
 return M

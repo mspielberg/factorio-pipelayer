@@ -105,15 +105,17 @@ function Network:absorb(other_network)
     self:add_via(via, underground_unit_number)
   end
   other_network:destroy()
-  self:set_fluid(self.fluid_name)
+  self:update()
 end
 
 function Network:add_via(above, below_unit_number)
   self.vias[below_unit_number] = above
+  self:update()
 end
 
 function Network:remove_via(below_unit_number)
   self.vias[below_unit_number] = nil
+  self:update()
 end
 
 function Network:add_underground_pipe(entity)
@@ -126,6 +128,7 @@ function Network:add_underground_pipe(entity)
     self.graph:add(unit_number, neighbor.unit_number)
   end
   fill_pipe(entity, self.fluid_name)
+  self:update()
 end
 
 function Network:remove_underground_pipe(entity)
@@ -157,7 +160,9 @@ function Network:remove_underground_pipe(entity)
   end
 
   self.graph:remove(unit_number)
-  if not next(self.pipes) then
+  if next(self.pipes) then
+    self:update()
+  else
     self:destroy()
   end
 end
@@ -241,7 +246,7 @@ function Network:foreach_underground_entity(callback)
 end
 
 function Network:set_fluid(fluid_name)
-  log("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
+  debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   self:foreach_underground_entity(function(entity)
     fill_pipe(entity, self.fluid_name)

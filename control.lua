@@ -38,13 +38,8 @@ local function on_toggle_editor(event)
   Editor.toggle_editor_status_for_player(event.player_index)
 end
 
-local function on_chunk_generated(event)
-  if event.surface.name == "plumbing" then
-    Editor.on_chunk_generated(event)
-  end
-end
-
 local function on_tick()
+  Blueprint.build_underground_ghosts()
   Network.update_all()
 end
 

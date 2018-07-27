@@ -1,8 +1,13 @@
 local Constants = require "Constants"
+local Editor = require "Editor"
 
 local SURFACE_NAME = Constants.SURFACE_NAME
 
 local M = {}
+
+local function debug(...)
+  log(...)
+end
 
 function M.on_init()
   global.editor_ghosts = {}
@@ -39,18 +44,14 @@ function M.bounding_box(bp)
   }
 end
 
-local pipe_request_chest
-local pipe_request_proxy
-local pending_pipe_ghosts
-local pending_pipe_counts
+do
+  local pipe_request_chest
+  local pipe_request_proxy
+  local pending_pipe_ghosts
+  local pending_pipe_counts
 
-local function add_item_request(name)
-  if pipe_request_proxy then
-    local requests = pipe_request_proxy.item_requests
-    requests[name] = (requests[name] or 0) + 1
-    pipe_request_proxy.item_requests = requests
-  elseif pipe_request_chest then
-    pending_pipe_counts[name] = (pending_pipe_counts[name] or 0) + 1
+  local function create_pipe_request_proxy()
+    debug("creating pipe_request_proxy")
     pipe_request_proxy = pipe_request_chest.surface.create_entity{
       name = "item-request-proxy",
       position = pipe_request_chest.position,
@@ -59,57 +60,86 @@ local function add_item_request(name)
       modules = pending_pipe_counts,
     }
     pipe_request_proxy.last_user = pipe_request_chest.last_user
-    pending_pipe_counts = nil
   end
-end
 
-function M.on_player_built_entity(event)
-  local entity = event.created_entity
-  if entity.name ~= "entity-ghost" then return end
-  local nonproxy_name = entity.ghost_name:match("^plumbing%-bpproxy%-(.*)$")
-  if not nonproxy_name then return end
+  local function add_item_request(ghost, name)
+    pending_pipe_counts[name] = (pending_pipe_counts[name] or 0) + 1
+    pending_pipe_ghosts[ghost.unit_number] = ghost
+  end
 
-  local surface = entity.surface
-  local position = entity.position
-  local editor_surface = game.surfaces[SURFACE_NAME]
-  local create_entity_args = {
-    name = "entity-ghost",
-    inner_name = nonproxy_name,
-    position = position,
-    force = entity.force,
-    direction = entity.direction,
-  }
-  if editor_surface.can_place_entity(create_entity_args) then
-    local editor_ghost = editor_surface.create_entity(create_entity_args)
-    editor_ghost.last_user = entity.last_user
+  local function defer(func)
+    script.on_event(defines.events.on_tick, function(event)
+      func(event)
+      script.on_event(defines.events.on_tick, nil)
+    end)
+  end
 
-    if nonproxy_name == "plumbing-via" and not pipe_request_chest then
-      pipe_request_chest = surface.create_entity{
-        name = "plumbing-pipe-request-chest",
-        position = position,
-        force = entity.force,
-      }
-      pipe_request_chest.operable = false
-      pipe_request_chest.last_user = entity.last_user
-      global.editor_ghosts[pipe_request_chest.unit_number] = pending_pipe_ghosts
-      pending_pipe_ghosts = nil
-    elseif pipe_request_chest then
-      add_item_request(nonproxy_name)
-    else
-      pending_pipe_ghosts[#pending_pipe_ghosts + 1] = editor_ghost
-      pending_pipe_counts[nonproxy_name] = (pending_pipe_counts[nonproxy_name] or 0) + 1
+  local function player_built_surface_via_ghost(entity)
+    defer(function(_)
+      local position = entity.position
+      local surface = entity.surface
+      if not pipe_request_chest then
+        debug("creating pipe_request_chest")
+        pipe_request_chest = surface.create_entity{
+          name = "plumbing-pipe-request-chest",
+          position = position,
+          force = entity.force,
+        }
+        pipe_request_chest.operable = false
+        pipe_request_chest.last_user = entity.last_user
+        global.editor_ghosts[pipe_request_chest.unit_number] = {
+          chest = pipe_request_chest,
+          ghosts = pending_pipe_ghosts,
+          pipe_counts = pending_pipe_counts,
+        }
+      end
+      if not pipe_request_proxy and next(pending_pipe_counts) then
+        create_pipe_request_proxy()
+      end
+    end)
+  end
+
+  local function player_built_plumbing_bpproxy_ghost(ghost, nonproxy_name)
+    debug("placing ghost for "..nonproxy_name)
+    local position = ghost.position
+    local editor_surface = game.surfaces[SURFACE_NAME]
+    local create_entity_args = {
+      name = "entity-ghost",
+      inner_name = nonproxy_name,
+      position = position,
+      force = ghost.force,
+      direction = ghost.direction,
+    }
+
+    if editor_surface.can_place_entity(create_entity_args) then
+      local editor_ghost = editor_surface.create_entity(create_entity_args)
+      editor_ghost.last_user = ghost.last_user
+      if nonproxy_name ~= "plumbing-via" then
+        add_item_request(editor_ghost, nonproxy_name)
+      end
     end
+
+    ghost.destroy()
   end
 
-  entity.destroy()
+  function M.on_player_built_entity(event)
+    local entity = event.created_entity
+    if entity.surface ~= game.surfaces.nauvis then return end
+    if entity.name ~= "entity-ghost" then return end
+    if entity.ghost_name == "plumbing-via" then return player_built_surface_via_ghost(entity) end
+
+    local nonproxy_name = entity.ghost_name:match("^plumbing%-bpproxy%-(.*)$")
+    if nonproxy_name then return player_built_plumbing_bpproxy_ghost(entity, nonproxy_name) end
+  end
+
+  function M.on_put_item(_)
+    pipe_request_chest = nil
+    pipe_request_proxy = nil
+    pending_pipe_ghosts = {}
+    pending_pipe_counts = {}
+  end
 end
 
-function M.on_put_item(_)
-  pipe_request_chest = nil
-  pipe_request_proxy = nil
-  pending_pipe_ghosts = {}
-  pending_pipe_counts = {}
-end
 
 local function insert_or_spill(player, stack)
   local inserted = player.insert(stack)
@@ -123,7 +153,7 @@ local function cleanup_surface_via(player, surface_via)
   local position = surface_via.position
   local chest = surface.find_entity("plumbing-pipe-request-chest", position)
   if chest then
-    local inv = pipe_request_chest.get_inventory(defines.inventory.chest)
+    local inv = chest.get_inventory(defines.inventory.chest)
     for i=1,#inv do
       local stack = inv[i]
       if stack.valid_for_read then
@@ -195,14 +225,81 @@ function M.on_player_setup_blueprint(event)
   end
 
   for _, ug_pipe in ipairs(plumbing_surface.find_entities(area)) do
-    bp_entities[#bp_entities + 1] = {
-      entity_number = #bp_entities + 1,
-      name = "plumbing-bpproxy-"..ug_pipe.name,
-      position = world_to_bp(ug_pipe.position),
-      direction = ug_pipe.direction,
-    }
+    if ug_pipe.name ~= "entity-ghost" then
+      bp_entities[#bp_entities + 1] = {
+        entity_number = #bp_entities + 1,
+        name = "plumbing-bpproxy-"..ug_pipe.name,
+        position = world_to_bp(ug_pipe.position),
+        direction = ug_pipe.direction,
+      }
+    end
   end
   bp.set_blueprint_entities(bp_entities)
+end
+
+local function count_can_build(chest_inventory, pipe_counts)
+  local out = {}
+  local actual_available = chest_inventory.get_contents()
+  for pipe_name, requested in pairs(pipe_counts) do
+    local can_build =  math.min(requested, actual_available[pipe_name] or 0)
+    pipe_counts[pipe_name] = pipe_counts[pipe_name] - can_build
+    out[pipe_name] = can_build
+  end
+  return out
+end
+
+local function cleanup_pipe_request_chest(chest, chest_inventory)
+  local request_proxy = chest.surface.find_entity("item-request-proxy", chest.position)
+  if request_proxy then
+    request_proxy.destroy()
+  end
+
+  if chest_inventory.is_empty() then
+    chest.destroy()
+  else
+    chest.order_deconstruction(chest.force)
+  end
+end
+
+function M.build_underground_ghosts()
+  debug(serpent.block(global.editor_ghosts))
+  for chest_unit_number, chest_info in pairs(global.editor_ghosts) do
+    local chest = chest_info.chest
+    local ghosts = chest_info.ghosts
+    local pipe_counts = chest_info.pipe_counts
+    if chest.valid then
+      debug("chest is valid")
+      local chest_inventory = chest.get_inventory(defines.inventory.chest)
+      local can_build = count_can_build(chest_inventory, pipe_counts)
+      debug("can_build = "..serpent.line(can_build))
+      for ghost_unit_number, ghost in pairs(ghosts) do
+        if ghost.valid then
+          debug("ghost is valid")
+          local entity_name = ghost.ghost_name
+          local count = can_build[entity_name] or 0
+          if count > 0 then
+            chest_inventory.remove{name=entity_name, count=1}
+            local _, revived = ghost.revive()
+            Editor.connect_underground_pipe(revived)
+            can_build[entity_name] = can_build[entity_name] - 1
+            ghosts[ghost_unit_number] = nil
+          end
+        else
+          debug("ghost is NOT valid")
+          ghosts[ghost_unit_number] = nil
+        end
+      end
+
+      if not next(ghosts) then
+        debug("no more ghosts")
+        cleanup_pipe_request_chest(chest, chest_inventory)
+        global.editor_ghosts[chest_unit_number] = nil
+      end
+    else
+      debug("chest is NOT valid")
+      global.editor_ghosts[chest_unit_number] = nil
+    end
+  end
 end
 
 return M
