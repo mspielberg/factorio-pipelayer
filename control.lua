@@ -14,12 +14,16 @@ local function on_load()
 end
 
 local function on_built_entity(event)
-  if event.mod_name or event.robot then
+  if event.mod_name then
     Editor.on_robot_built_entity(event)
   else
     Blueprint.on_player_built_entity(event)
     Editor.on_player_built_entity(event)
   end
+end
+
+local function on_robot_built_entity(event)
+  Editor.on_robot_built_entity(event.robot, event.created_entity, event.stack)
 end
 
 local function on_pre_player_mined_item(event)
@@ -46,7 +50,8 @@ end
 script.on_init(on_init)
 script.on_load(on_load)
 
-script.on_event({defines.events.on_built_entity, defines.events.on_robot_built_entity}, on_built_entity)
+script.on_event(defines.events.on_built_entity, on_built_entity)
+script.on_event(defines.events.on_robot_built_entity, on_robot_built_entity)
 script.on_event(defines.events.on_pre_player_mined_item, on_pre_player_mined_item)
 script.on_event(defines.events.on_pre_ghost_deconstructed, on_pre_ghost_deconstructed)
 script.on_event(defines.events.on_player_mined_entity, Editor.on_player_mined_entity)

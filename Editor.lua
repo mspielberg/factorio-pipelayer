@@ -64,6 +64,8 @@ local function get_player_pipe_stacks(player)
 end
 
 local function move_player_to_editor(player)
+  local success = player.clean_cursor()
+  if not success then return end
   local pipe_stacks = get_player_pipe_stacks(player)
   local player_index = player.index
   player_state[player_index] = {
@@ -156,10 +158,18 @@ local function built_surface_via(player, entity)
     editor_surface.request_to_generate_chunks(position, 1)
     editor_surface.force_generate_chunk_requests()
   end
+
+  local direction = opposite_direction(entity.direction)
+  -- check for existing underground via ghost
+  local underground_ghost = editor_surface.find_entity("entity-ghost", position)
+  if underground_ghost and underground_ghost.ghost_name == "plumbing-via" then
+    direction = underground_ghost.direction
+  end
+
   local create_args = {
     name = "plumbing-via",
     position = position,
-    direction = opposite_direction(entity.direction),
+    direction = direction,
     force = entity.force,
   }
   if not editor_surface.can_place_entity(create_args) then
@@ -204,7 +214,10 @@ function M.on_player_built_entity(event)
   end
 end
 
-function M.on_robot_built_entity(event)
+function M.on_robot_built_entity(_, entity, _)
+  if entity.name == "plumbing-via" then
+    built_surface_via(nil, entity)
+  end
 end
 
 local function mined_surface_via(entity)
