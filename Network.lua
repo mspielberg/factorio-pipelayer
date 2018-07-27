@@ -213,7 +213,7 @@ function Network:balance()
         other_vias[#other_vias+1] = via
       end
   end)
-  local average_temp = total_temperature / num_vias
+  local average_temp = (total_amount > 0 and total_temperature / total_amount or 15)
 
   -- distribute fluid by priority
   total_amount = distribute(input_vias, fluid_name, total_amount, average_temp)
