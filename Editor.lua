@@ -2,12 +2,15 @@ local Constants = require "Constants"
 local Network = require "Network"
 
 local M = {}
-
 local SURFACE_NAME = Constants.SURFACE_NAME
 local UNDERGROUND_TILE_NAME = Constants.UNDERGROUND_TILE_NAME
 
 local editor_surface
 local player_state
+
+local function debug(...)
+  rame.print(...)
+end
 
 function M.on_init()
     local surface = game.create_surface(
@@ -117,7 +120,7 @@ local function connect_underground_pipe(entity)
   local networks = connected_networks(entity)
   if not next(networks) then
     local network = Network:new()
-    game.print("created new network "..network.id)
+    debug("created new network "..network.id)
     network:add_underground_pipe(entity)
     return network
   end
@@ -126,7 +129,7 @@ local function connect_underground_pipe(entity)
   main_network:add_underground_pipe(entity)
   for i=2,#networks do
     local to_absorb = networks[i]
-    game.print("absorbing network "..to_absorb.id.." into network "..main_network.id)
+    debug("absorbing network "..to_absorb.id.." into network "..main_network.id)
     main_network:absorb(to_absorb)
     main_network:update()
   end

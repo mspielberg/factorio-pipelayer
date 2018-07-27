@@ -2,6 +2,10 @@ local Constants = require "Constants"
 local Graph = require "Graph"
 local PipeConnections = require "PipeConnections"
 
+local function debug(...)
+  game.print(...)
+end
+
 local SURFACE_NAME = Constants.SURFACE_NAME
 
 local pipe_capacity_cache = {}
@@ -80,6 +84,7 @@ function Network.for_entity(entity)
 end
 
 function Network:destroy()
+  debug("destroying network "..self.id)
   all_networks[self.id] = nil
 end
 
