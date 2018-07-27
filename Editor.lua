@@ -6,11 +6,11 @@ local M = {}
 local SURFACE_NAME = Constants.SURFACE_NAME
 local UNDERGROUND_TILE_NAME = Constants.UNDERGROUND_TILE_NAME
 
+local editor_surface
 local player_state
 
 function M.on_init()
-  if not game.surfaces[SURFACE_NAME] then
-    game.create_surface(
+    local surface = game.create_surface(
       SURFACE_NAME,
       {
         starting_area = "none",
@@ -29,16 +29,15 @@ function M.on_init()
         },
       }
     )
-    game.surfaces[SURFACE_NAME].daytime = 0.35
-    game.surfaces[SURFACE_NAME].freeze_daytime = true
-  end
-  if not global.player_state then
+    surface.daytime = 0.35
+    surface.freeze_daytime = true
+    global.editor_surface = surface
     global.player_state = {}
-  end
-  M.on_load()
+    M.on_load()
 end
 
 function M.on_load()
+  editor_surface = global.editor_surface
   player_state = global.player_state
 end
 
@@ -70,7 +69,7 @@ local function move_player_to_editor(player)
     character = player.character,
   }
   player.character = nil
-  player.teleport(player.position, SURFACE_NAME)
+  player.teleport(player.position, editor_surface)
   for _, stack in ipairs(pipe_stacks) do
     player.insert(stack)
   end
@@ -88,7 +87,7 @@ end
 
 function M.toggle_editor_status_for_player(player_index)
   local player = game.players[player_index]
-  if player.surface.name == SURFACE_NAME then
+  if player.surface == editor_surface then
     return_player_from_editor(player)
   elseif player.surface == game.surfaces.nauvis then
     move_player_to_editor(player)
@@ -149,11 +148,10 @@ local function opposite_direction(direction)
 end
 
 local function player_built_surface_via(player, entity)
-  local surface = game.surfaces[SURFACE_NAME]
   local position = entity.position
-  if not surface.is_chunk_generated(position) then
-    surface.request_to_generate_chunks(position, 1)
-    surface.force_generate_chunk_requests()
+  if not editor_surface.is_chunk_generated(position) then
+    editor_surface.request_to_generate_chunks(position, 1)
+    editor_surface.force_generate_chunk_requests()
   end
   local create_args = {
     name = "plumbing-via",
@@ -161,10 +159,10 @@ local function player_built_surface_via(player, entity)
     direction = opposite_direction(entity.direction),
     force = entity.force,
   }
-  if not surface.can_place_entity(create_args) then
+  if not editor_surface.can_place_entity(create_args) then
     abort_player_build(player, entity)
   else
-    local underground_via = surface.create_entity(create_args)
+    local underground_via = editor_surface.create_entity(create_args)
     underground_via.active = false
     underground_via.minable = false
     local network = connect_underground_pipe(underground_via)
@@ -194,13 +192,13 @@ function M.on_player_built_entity(event)
     else
       abort_player_build(player, entity, {"plumbing-error.bad-surface"})
     end
-  elseif surface.name == SURFACE_NAME then
+  elseif surface == editor_surface then
     player_built_underground_pipe(player_index, entity, event.stack)
   end
 end
 
 local function mined_surface_via(entity)
-  local underground_via = game.surfaces[SURFACE_NAME].find_entity("plumbing-via", entity.position)
+  local underground_via = editor_surface.find_entity("plumbing-via", entity.position)
   local network = Network.for_entity(underground_via)
   if network then
     network:remove_underground_pipe(underground_via)
@@ -241,11 +239,23 @@ end
 function M.on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
-  if surface.name == SURFACE_NAME then
+  if surface == editor_surface then
     player_mined_from_editor(event)
   elseif surface.name == "nauvis" and entity.name == "plumbing-via" then
     mined_surface_via(entity)
   end
+end
+
+function M.on_player_rotated_entity(event)
+  local entity = event.entity
+  if entity.surface ~= editor_surface then return end
+  local old_network = Network.for_entity(entity)
+  local new_networks = connected_networks(entity)
+  if old_network:is_singleton() and not next(new_networks) then
+    return
+  end
+  old_network:remove_underground_pipe(entity)
+  connect_underground_pipe(entity)
 end
 
 return M

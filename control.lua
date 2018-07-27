@@ -55,6 +55,7 @@ script.on_event({defines.events.on_built_entity, defines.events.on_robot_built_e
 script.on_event(defines.events.on_pre_player_mined_item, on_pre_player_mined_item)
 script.on_event(defines.events.on_pre_ghost_deconstructed, on_pre_ghost_deconstructed)
 script.on_event(defines.events.on_player_mined_entity, Editor.on_player_mined_entity)
+script.on_event(defines.events.on_player_rotated_entity, Editor.on_player_rotated_entity)
 script.on_event(defines.events.on_entity_died, Editor.on_entity_died)
 script.on_event("plumbing-toggle-editor-view", on_toggle_editor)
 script.on_event(defines.events.on_player_setup_blueprint, on_player_setup_blueprint)

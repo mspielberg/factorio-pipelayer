@@ -75,12 +75,18 @@ function Network.new()
   return self
 end
 
+function Network.for_entity(entity)
+  return network_for_entity[entity.unit_number]
+end
+
 function Network:destroy()
   all_networks[self.id] = nil
 end
 
-function Network.for_entity(entity)
-  return network_for_entity[entity.unit_number]
+function Network:is_singleton()
+  local n = next(self.pipes)
+  local n2 = next(self.pipes, n)
+  return n and not n2
 end
 
 function Network:absorb(other_network)
