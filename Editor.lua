@@ -9,7 +9,7 @@ local editor_surface
 local player_state
 
 local function debug(...)
-  rame.print(...)
+  game.print(...)
 end
 
 function M.on_init()
@@ -122,6 +122,7 @@ local function connect_underground_pipe(entity)
     local network = Network:new()
     debug("created new network "..network.id)
     network:add_underground_pipe(entity)
+    network:update()
     return network
   end
 
@@ -131,7 +132,6 @@ local function connect_underground_pipe(entity)
     local to_absorb = networks[i]
     debug("absorbing network "..to_absorb.id.." into network "..main_network.id)
     main_network:absorb(to_absorb)
-    main_network:update()
   end
   return main_network
 end
@@ -170,6 +170,7 @@ local function player_built_surface_via(player, entity)
     underground_via.minable = false
     local network = connect_underground_pipe(underground_via)
     network:add_via(entity, underground_via.unit_number)
+    network:update()
   end
 end
 
@@ -205,6 +206,7 @@ local function mined_surface_via(entity)
   local network = Network.for_entity(underground_via)
   if network then
     network:remove_underground_pipe(underground_via)
+    network:update()
   end
   underground_via.destroy()
 end
@@ -231,6 +233,7 @@ local function player_mined_from_editor(event)
   local network = Network.for_entity(entity)
   if network then
     network:remove_underground_pipe(entity)
+    network:update()
   end
   local character = player_state[event.player_index].character
   if character then
@@ -252,13 +255,22 @@ end
 function M.on_player_rotated_entity(event)
   local entity = event.entity
   if entity.surface ~= editor_surface then return end
+  local surface_via = game.surfaces.nauvis.find_entity("plumbing-via", entity.position)
   local old_network = Network.for_entity(entity)
   local new_networks = connected_networks(entity)
   if old_network:is_singleton() and not next(new_networks) then
     return
   end
+  if surface_via then
+    old_network:remove_via(entity.unit_number)
+  end
   old_network:remove_underground_pipe(entity)
-  connect_underground_pipe(entity)
+  old_network:update()
+  local new_network = connect_underground_pipe(entity)
+  if surface_via then
+    new_network:add_via(surface_via, entity.unit_number)
+  end
+  new_network:update()
 end
 
 return M

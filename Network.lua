@@ -157,9 +157,7 @@ function Network:remove_underground_pipe(entity)
   end
 
   self.graph:remove(unit_number)
-  if next(self.pipes) then
-    self:update()
-  else
+  if not next(self.pipes) then
     self:destroy()
   end
 end
