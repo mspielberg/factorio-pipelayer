@@ -124,23 +124,27 @@ function Network:remove_underground_pipe(entity)
   self:remove_via(unit_number)
   network_for_entity[unit_number] = nil
 
-  local fragments = self.graph:removal_fragments(unit_number)
-  for i=2,#fragments do
-    local fragment = fragments[i]
-    local split_network = Network.new()
-    for fragment_pipe_unit_number in pairs(fragment) do
-      split_network:add_underground_pipe(self.pipes[fragment_pipe_unit_number])
-      if self.vias[fragment_pipe_unit_number] then
-        split_network:add_via(self.vias[fragment_pipe_unit_number], fragment_pipe_unit_number)
-        self:remove_via(fragment_pipe_unit_number)
+  if #entity.neighbours[1] > 1 then
+    -- multiple connections for this pipe, so this may split the network into multiple new networks
+    local fragments = self.graph:removal_fragments(unit_number)
+    for i=2,#fragments do
+      local fragment = fragments[i]
+      local split_network = Network.new()
+      for fragment_pipe_unit_number in pairs(fragment) do
+        split_network:add_underground_pipe(self.pipes[fragment_pipe_unit_number])
+        if self.vias[fragment_pipe_unit_number] then
+          split_network:add_via(self.vias[fragment_pipe_unit_number], fragment_pipe_unit_number)
+          self:remove_via(fragment_pipe_unit_number)
+        end
+        network_for_entity[fragment_pipe_unit_number] = split_network
+        self.pipes[fragment_pipe_unit_number] = nil
+        self.graph:remove(fragment_pipe_unit_number)
       end
-      network_for_entity[fragment_pipe_unit_number] = split_network
-      self.pipes[fragment_pipe_unit_number] = nil
-      self.graph:remove(fragment_pipe_unit_number)
+      split_network.graph:remove(unit_number)
+      split_network:update()
     end
-    split_network.graph:remove(unit_number)
-    split_network:update()
   end
+
   self.graph:remove(unit_number)
   if next(self.pipes) then
     self:update()
