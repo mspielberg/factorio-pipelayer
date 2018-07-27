@@ -29,6 +29,8 @@ function M.on_init()
         },
       }
     )
+    game.surfaces[SURFACE_NAME].daytime = 0.35
+    game.surfaces[SURFACE_NAME].freeze_daytime = true
   end
   if not global.player_state then
     global.player_state = {}
