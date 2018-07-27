@@ -148,9 +148,14 @@ end
 
 local function player_built_surface_via(player, entity)
   local surface = game.surfaces[SURFACE_NAME]
+  local position = entity.position
+  if not surface.is_chunk_generated(position) then
+    surface.request_to_generate_chunks(position, 1)
+    surface.force_generate_chunk_requests()
+  end
   local create_args = {
     name = "plumbing-via",
-    position = entity.position,
+    position = position,
     direction = opposite_direction(entity.direction),
     force = entity.force,
   }
@@ -178,6 +183,7 @@ function M.on_player_built_entity(event)
   local player_index = event.player_index
   local player = game.players[player_index]
   local entity = event.created_entity
+  if not entity.valid or entity.name == "entity-ghost" then return end
   local surface = entity.surface
 
   if entity.name == "plumbing-via" then
@@ -238,7 +244,6 @@ function M.on_player_mined_entity(event)
   elseif surface.name == "nauvis" and entity.name == "plumbing-via" then
     mined_surface_via(entity)
   end
-
 end
 
 return M
