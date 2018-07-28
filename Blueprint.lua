@@ -140,14 +140,14 @@ do
   end
 end
 
-local function insert_or_spill(player, stack)
-  local inserted = player.insert(stack)
+local function insert_or_spill(insertable, player, stack)
+  local inserted = insertable.insert(stack)
   if inserted < stack.count then
-    player.surface.spill_item_stack{name = stack.name, count = stack.count - inserted}
+    player.surface.spill_item_stack{position = player.position, name = stack.name, count = stack.count - inserted}
   end
 end
 
-local function cleanup_surface_via(player, surface_via)
+local function cleanup_surface_via(surface_via, player, insertable)
   local surface = surface_via.surface
   local position = surface_via.position
   local chest = surface.find_entity("plumbing-pipe-request-chest", position)
@@ -156,10 +156,10 @@ local function cleanup_surface_via(player, surface_via)
     for i=1,#inv do
       local stack = inv[i]
       if stack.valid_for_read then
-        insert_or_spill(player, stack)
+        insert_or_spill(insertable, player, stack)
       end
     end
-    global.editor_ghosts[chest.unit_number] = nil
+    editor_ghosts[chest.unit_number] = nil
     chest.destroy()
   end
 end
@@ -169,13 +169,13 @@ local function player_mined_surface_via_ghost(player, ghost)
   if counterpart and counterpart.ghost_name == "plumbing-via" then
     counterpart.destroy()
   end
-  cleanup_surface_via(player, ghost)
+  cleanup_surface_via(ghost, player, player)
 end
 
 local function player_mined_underground_via_ghost(player, ghost)
   local counterpart = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
   if counterpart and counterpart.ghost_name == "plumbing-via" then
-    cleanup_surface_via(player, counterpart)
+    cleanup_surface_via(counterpart, player, player)
     counterpart.destroy()
   end
 end
@@ -190,6 +190,16 @@ function M.on_pre_player_mined_item(player_index, entity)
     end
   end
 end
+
+function M.on_player_mined_entity(player_index, entity, buffer)
+  if entity.name == "plumbing-via" and entity.surface == game.surfaces.nauvis then
+    local player = game.players[player_index]
+    cleanup_surface_via(entity, player, buffer)
+  end
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- capture underground pipes as bpproxy ghosts
 
 function M.on_player_setup_blueprint(event)
   local player_index = event.player_index
