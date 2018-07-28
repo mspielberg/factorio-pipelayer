@@ -140,7 +140,6 @@ do
   end
 end
 
-
 local function insert_or_spill(player, stack)
   local inserted = player.insert(stack)
   if inserted < stack.count then
@@ -262,19 +261,15 @@ local function cleanup_pipe_request_chest(chest, chest_inventory)
 end
 
 function M.build_underground_ghosts()
-  debug(serpent.block(global.editor_ghosts))
   for chest_unit_number, chest_info in pairs(global.editor_ghosts) do
     local chest = chest_info.chest
     local ghosts = chest_info.ghosts
     local pipe_counts = chest_info.pipe_counts
     if chest.valid then
-      debug("chest is valid")
       local chest_inventory = chest.get_inventory(defines.inventory.chest)
       local can_build = count_can_build(chest_inventory, pipe_counts)
-      debug("can_build = "..serpent.line(can_build))
       for ghost_unit_number, ghost in pairs(ghosts) do
         if ghost.valid then
-          debug("ghost is valid")
           local entity_name = ghost.ghost_name
           local count = can_build[entity_name] or 0
           if count > 0 then
@@ -285,18 +280,15 @@ function M.build_underground_ghosts()
             ghosts[ghost_unit_number] = nil
           end
         else
-          debug("ghost is NOT valid")
           ghosts[ghost_unit_number] = nil
         end
       end
 
       if not next(ghosts) then
-        debug("no more ghosts")
         cleanup_pipe_request_chest(chest, chest_inventory)
         global.editor_ghosts[chest_unit_number] = nil
       end
     else
-      debug("chest is NOT valid")
       global.editor_ghosts[chest_unit_number] = nil
     end
   end
