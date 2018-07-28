@@ -5,12 +5,29 @@ local SURFACE_NAME = Constants.SURFACE_NAME
 
 local M = {}
 
+--[[
+  editor_ghosts[pipe_request_chest_unit_number] = {
+    chest = pipe_request_chest_entity,
+    ghosts = {
+      [ghost_unit_number] = underground_pipe_ghost_entity,
+    },
+    pipe_counts = {
+      [pipe_name] = 42, -- number of ghosts still existing associated with this chest
+    },
+  }
+]]
+local editor_ghosts
+
 local function debug(...)
   log(...)
 end
 
 function M.on_init()
   global.editor_ghosts = {}
+end
+
+function M.on_load()
+  editor_ghosts = global.editor_ghosts
 end
 
 function M.is_setup_bp(stack)
@@ -21,6 +38,7 @@ function M.is_setup_bp(stack)
     stack.is_blueprint_setup()
 end
 
+-- returns BoundingBox of blueprint entities (not tiles!) in blueprint coordinates
 function M.bounding_box(bp)
   local left = -0.1
   local top = -0.1
@@ -44,6 +62,8 @@ function M.bounding_box(bp)
   }
 end
 
+-- encapsulates all inter-event state between on_built_entity events that happen
+-- as a result of placing a blueprint
 do
   local pipe_request_chest
   local pipe_request_proxy
@@ -67,6 +87,7 @@ do
     pending_pipe_ghosts[ghost.unit_number] = ghost
   end
 
+  -- runs func at end of current tick, i.e. after all blueprint ghosts have been placed
   local function defer(func)
     script.on_event(defines.events.on_tick, function(event)
       func(event)
@@ -79,7 +100,6 @@ do
       local position = entity.position
       local surface = entity.surface
       if not pipe_request_chest then
-        debug("creating pipe_request_chest")
         pipe_request_chest = surface.create_entity{
           name = "plumbing-pipe-request-chest",
           position = position,
@@ -87,7 +107,7 @@ do
         }
         pipe_request_chest.operable = false
         pipe_request_chest.last_user = entity.last_user
-        global.editor_ghosts[pipe_request_chest.unit_number] = {
+        editor_ghosts[pipe_request_chest.unit_number] = {
           chest = pipe_request_chest,
           ghosts = pending_pipe_ghosts,
           pipe_counts = pending_pipe_counts,
@@ -99,6 +119,7 @@ do
     end)
   end
 
+  -- converts overworld bpproxy ghost to regular ghost underground
   local function player_built_plumbing_bpproxy_ghost(ghost, nonproxy_name)
     debug("placing ghost for "..nonproxy_name)
     local position = ghost.position
@@ -246,11 +267,14 @@ function M.on_player_setup_blueprint(event)
   bp.set_blueprint_entities(bp_entities)
 end
 
+------------------------------------------------------------------------------------------------------------------------
+-- construction of underground ghosts from pipes in pipe request chests
+
 local function count_can_build(chest_inventory, pipe_counts)
   local out = {}
   local actual_available = chest_inventory.get_contents()
   for pipe_name, requested in pairs(pipe_counts) do
-    local can_build =  math.min(requested, actual_available[pipe_name] or 0)
+    local can_build = math.min(requested, actual_available[pipe_name] or 0)
     pipe_counts[pipe_name] = pipe_counts[pipe_name] - can_build
     out[pipe_name] = can_build
   end
@@ -271,7 +295,7 @@ local function cleanup_pipe_request_chest(chest, chest_inventory)
 end
 
 function M.build_underground_ghosts()
-  for chest_unit_number, chest_info in pairs(global.editor_ghosts) do
+  for chest_unit_number, chest_info in pairs(editor_ghosts) do
     local chest = chest_info.chest
     local ghosts = chest_info.ghosts
     local pipe_counts = chest_info.pipe_counts
@@ -296,10 +320,10 @@ function M.build_underground_ghosts()
 
       if not next(ghosts) then
         cleanup_pipe_request_chest(chest, chest_inventory)
-        global.editor_ghosts[chest_unit_number] = nil
+        editor_ghosts[chest_unit_number] = nil
       end
     else
-      global.editor_ghosts[chest_unit_number] = nil
+      editor_ghosts[chest_unit_number] = nil
     end
   end
 end
