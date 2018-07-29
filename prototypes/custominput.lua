@@ -1,7 +1,7 @@
 data:extend{
   {
     type = "custom-input",
-    name = "plumbing-toggle-editor-view",
+    name = "pipefitter-toggle-editor-view",
     key_sequence = "CONTROL + P",
   },
 }

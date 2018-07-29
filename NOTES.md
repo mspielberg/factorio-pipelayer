@@ -1,6 +1,6 @@
-1. player disconnects while in plumbing view
-2. player takes damage while in plumbing view
-3. player is killed while in plumbing view
+1. player disconnects while in pipefitter view
+2. player takes damage while in pipefitter view
+3. player is killed while in pipefitter view
 
 # TODO
 

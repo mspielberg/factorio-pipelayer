@@ -16,10 +16,9 @@ local function add_tint(proto, tint)
   end
 end
 
-
 local function make_proxy(proto)
   local proxy_proto = util.table.deepcopy(proto)
-  proxy_proto.name = "plumbing-bpproxy-"..proto.name
+  proxy_proto.name = "pipefitter-bpproxy-"..proto.name
   proxy_proto.collision_mask = {}
   proxy_proto.flags = {"player-creation", "placeable-off-grid"}
   proxy_proto.placeable_by = proxy_proto.placeable_by or {{item=proto.minable.result, count=1}}
@@ -27,12 +26,12 @@ local function make_proxy(proto)
   return proxy_proto
 end
 
-local connector_proxy = make_proxy(data.raw["storage-tank"]["plumbing-connector"])
+local connector_proxy = make_proxy(data.raw["storage-tank"]["pipefitter-connector"])
 connector_proxy.placeable_by[1].count = 0
 data:extend{connector_proxy}
 
 for _, proto in pairs(data.raw["pipe"]) do
-  if not proto.name:find("^plumbing%-bpproxy%-") then
+  if not proto.name:find("^pipefitter%-bpproxy%-") then
     local proxy = make_proxy(proto)
     log("adding entity "..proxy.type..","..proxy.name)
     data:extend{proxy}

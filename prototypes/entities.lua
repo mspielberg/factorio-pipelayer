@@ -11,11 +11,11 @@ local ug = data.raw["pipe-to-ground"]["pipe-to-ground"]
 
 local connector = {
   type = "storage-tank",
-  name = "plumbing-connector",
+  name = "pipefitter-connector",
   icon = ug.icon,
   icon_size = ug.icon_size,
   flags = ug.flags,
-  minable = {mining_time = 1.5, result = "plumbing-connector"},
+  minable = {mining_time = 1.5, result = "pipefitter-connector"},
   max_health = ug.max_health,
   corpse = ug.corpse,
   resistances = ug.resistances,
@@ -98,7 +98,7 @@ local connector = {
 
 local pipe_request_chest = {
   type = "container",
-  name = "plumbing-pipe-request-chest",
+  name = "pipefitter-pipe-request-chest",
   icon = "__core__/graphics/empty.png",
   icon_size = 1,
   flags = {},

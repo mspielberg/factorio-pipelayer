@@ -101,7 +101,7 @@ function M.toggle_editor_status_for_player(player_index)
   elseif player.surface == game.surfaces.nauvis then
     move_player_to_editor(player)
   else
-    player.print({"plumbing-error.bad-surface"})
+    player.print({"pipefitter-error.bad-surface"})
   end
 end
 
@@ -147,7 +147,7 @@ local function abort_player_build(player, entity)
   entity.surface.create_entity{
     name = "flying-text",
     position = entity.position,
-    text = {"plumbing-error.underground-obstructed"},
+    text = {"pipefitter-error.underground-obstructed"},
   }
   entity.destroy()
 end
@@ -166,12 +166,12 @@ local function built_surface_connector(player, entity)
   local direction = opposite_direction(entity.direction)
   -- check for existing underground connector ghost
   local underground_ghost = editor_surface.find_entity("entity-ghost", position)
-  if underground_ghost and underground_ghost.ghost_name == "plumbing-connector" then
+  if underground_ghost and underground_ghost.ghost_name == "pipefitter-connector" then
     direction = underground_ghost.direction
   end
 
   local create_args = {
-    name = "plumbing-connector",
+    name = "pipefitter-connector",
     position = position,
     direction = direction,
     force = entity.force,
@@ -207,11 +207,11 @@ function M.on_player_built_entity(event)
   if not entity.valid or entity.name == "entity-ghost" then return end
   local surface = entity.surface
 
-  if entity.name == "plumbing-connector" then
+  if entity.name == "pipefitter-connector" then
     if surface.name == "nauvis" then
       built_surface_connector(player, entity)
     else
-      abort_player_build(player, entity, {"plumbing-error.bad-surface"})
+      abort_player_build(player, entity, {"pipefitter-error.bad-surface"})
     end
   elseif surface == editor_surface then
     player_built_underground_pipe(player_index, entity, event.stack)
@@ -219,13 +219,13 @@ function M.on_player_built_entity(event)
 end
 
 function M.on_robot_built_entity(_, entity, _)
-  if entity.name == "plumbing-connector" then
+  if entity.name == "pipefitter-connector" then
     built_surface_connector(nil, entity)
   end
 end
 
 local function mined_surface_connector(entity)
-  local underground_connector = editor_surface.find_entity("plumbing-connector", entity.position)
+  local underground_connector = editor_surface.find_entity("pipefitter-connector", entity.position)
   local network = Network.for_entity(underground_connector)
   if network then
     network:remove_underground_pipe(underground_connector)
@@ -267,7 +267,7 @@ function M.on_player_mined_entity(event)
   local surface = entity.surface
   if surface == editor_surface then
     player_mined_from_editor(event)
-  elseif surface.name == "nauvis" and entity.name == "plumbing-connector" then
+  elseif surface.name == "nauvis" and entity.name == "pipefitter-connector" then
     mined_surface_connector(entity)
   end
 end
@@ -275,7 +275,7 @@ end
 function M.on_player_rotated_entity(event)
   local entity = event.entity
   if entity.surface ~= editor_surface then return end
-  local surface_connector = game.surfaces.nauvis.find_entity("plumbing-connector", entity.position)
+  local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", entity.position)
   local old_network = Network.for_entity(entity)
   local new_networks = connected_networks(entity)
   if old_network:is_singleton() and not next(new_networks) then

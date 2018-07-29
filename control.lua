@@ -74,7 +74,7 @@ end
 script.on_init(on_init)
 script.on_load(on_load)
 script.on_nth_tick(60, on_tick)
-script.on_event("plumbing-toggle-editor-view", on_toggle_editor)
+script.on_event("pipefitter-toggle-editor-view", on_toggle_editor)
 for event_name, handler in pairs(event_handlers) do
   script.on_event(defines.events[event_name], handler)
 end

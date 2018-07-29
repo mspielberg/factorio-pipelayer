@@ -1,7 +1,7 @@
 require "util"
 
-local ug = util.table.deepcopy(data.raw.recipe["pipe-to-ground"])
-ug.name = "plumbing-connector"
-ug.result_count = 1
-ug.result = "plumbing-connector"
-data:extend{ug}
+local connector = util.table.deepcopy(data.raw.recipe["pipe-to-ground"])
+connector.name = "pipefitter-connector"
+connector.result_count = 1
+connector.result = "pipefitter-connector"
+data:extend{connector}

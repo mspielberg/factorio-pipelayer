@@ -95,7 +95,7 @@ local function on_built_surface_connector(surface_connector)
   local last_user = surface_connector.last_user
 
   local pipe_request_chest = surface.create_entity{
-    name = "plumbing-pipe-request-chest",
+    name = "pipefitter-pipe-request-chest",
     position = position,
     force = force,
   }
@@ -143,7 +143,7 @@ do
   end
 
   -- converts overworld bpproxy ghost to regular ghost underground
-  local function player_built_plumbing_bpproxy_ghost(ghost, nonproxy_name)
+  local function player_built_pipefitter_bpproxy_ghost(ghost, nonproxy_name)
     debug("placing ghost for "..nonproxy_name)
     local position = ghost.position
     local editor_surface = game.surfaces[SURFACE_NAME]
@@ -158,7 +158,7 @@ do
     if editor_surface.can_place_entity(create_entity_args) then
       local editor_ghost = editor_surface.create_entity(create_entity_args)
       editor_ghost.last_user = ghost.last_user
-      if nonproxy_name ~= "plumbing-connector" then
+      if nonproxy_name ~= "pipefitter-connector" then
         add_item_request(editor_ghost, nonproxy_name)
       end
     end
@@ -170,22 +170,22 @@ do
     local entity = event.created_entity
     if entity.surface ~= game.surfaces.nauvis then return end
 
-    if entity.name == "plumbing-connector" then
+    if entity.name == "pipefitter-connector" then
       return on_built_surface_connector(entity)
     elseif entity.name == "entity-ghost" then
-      if entity.ghost_name == "plumbing-connector" then
+      if entity.ghost_name == "pipefitter-connector" then
         return player_built_surface_connector_ghost(entity)
       end
 
-      local nonproxy_name = entity.ghost_name:match("^plumbing%-bpproxy%-(.*)$")
+      local nonproxy_name = entity.ghost_name:match("^pipefitter%-bpproxy%-(.*)$")
       if nonproxy_name then
-        return player_built_plumbing_bpproxy_ghost(entity, nonproxy_name)
+        return player_built_pipefitter_bpproxy_ghost(entity, nonproxy_name)
       end
     end
   end
 
   function M.on_robot_built_entity(_, entity, _)
-    if entity.name == "plumbing-connector" and entity.surface == game.surfaces.nauvis then
+    if entity.name == "pipefitter-connector" and entity.surface == game.surfaces.nauvis then
       return on_built_surface_connector(entity)
     end
   end
@@ -207,7 +207,7 @@ end
 local function cleanup_surface_connector(surface_connector, player, insertable)
   local surface = surface_connector.surface
   local position = surface_connector.position
-  local chest = surface.find_entity("plumbing-pipe-request-chest", position)
+  local chest = surface.find_entity("pipefitter-pipe-request-chest", position)
   if chest then
     local inv = chest.get_inventory(defines.inventory.chest)
     for i=1,#inv do
@@ -223,7 +223,7 @@ end
 
 local function player_mined_surface_connector_ghost(player, ghost)
   local counterpart = game.surfaces[SURFACE_NAME].find_entity("entity-ghost", ghost.position)
-  if counterpart and counterpart.ghost_name == "plumbing-connector" then
+  if counterpart and counterpart.ghost_name == "pipefitter-connector" then
     counterpart.destroy()
   end
   cleanup_surface_connector(ghost, player, player)
@@ -231,14 +231,14 @@ end
 
 local function player_mined_underground_connector_ghost(player, ghost)
   local counterpart = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
-  if counterpart and counterpart.ghost_name == "plumbing-connector" then
+  if counterpart and counterpart.ghost_name == "pipefitter-connector" then
     cleanup_surface_connector(counterpart, player, player)
     counterpart.destroy()
   end
 end
 
 function M.on_pre_player_mined_item(player_index, entity)
-  if entity.name == "entity-ghost" and entity.ghost_name == "plumbing-connector" then
+  if entity.name == "entity-ghost" and entity.ghost_name == "pipefitter-connector" then
     local player = game.players[player_index]
     if entity.surface.name == SURFACE_NAME then
       return player_mined_underground_connector_ghost(player, entity)
@@ -249,7 +249,7 @@ function M.on_pre_player_mined_item(player_index, entity)
 end
 
 function M.on_player_mined_entity(player_index, entity, buffer)
-  if entity.name == "plumbing-connector" and entity.surface == game.surfaces.nauvis then
+  if entity.name == "pipefitter-connector" and entity.surface == game.surfaces.nauvis then
     local player = game.players[player_index]
     cleanup_surface_connector(entity, player, buffer)
   end
@@ -271,16 +271,16 @@ function M.on_player_setup_blueprint(event)
 
   local anchor_connector = surface.find_entities_filtered{
     area = area,
-    name = "plumbing-connector",
+    name = "pipefitter-connector",
   }[1]
   if not anchor_connector then return end
 
-  local plumbing_surface = game.surfaces[SURFACE_NAME]
+  local pipefitter_surface = game.surfaces[SURFACE_NAME]
 
   -- find counterpart in blueprint
   local world_to_bp
   for _, bp_entity in ipairs(bp_entities) do
-    if bp_entity.name == "plumbing-connector" then
+    if bp_entity.name == "pipefitter-connector" then
       local x_offset = bp_entity.position.x - anchor_connector.position.x
       local y_offset = bp_entity.position.y - anchor_connector.position.y
       world_to_bp = function(position)
@@ -290,11 +290,11 @@ function M.on_player_setup_blueprint(event)
     end
   end
 
-  for _, ug_pipe in ipairs(plumbing_surface.find_entities(area)) do
+  for _, ug_pipe in ipairs(pipefitter_surface.find_entities(area)) do
     if ug_pipe.name ~= "entity-ghost" then
       bp_entities[#bp_entities + 1] = {
         entity_number = #bp_entities + 1,
-        name = "plumbing-bpproxy-"..ug_pipe.name,
+        name = "pipefitter-bpproxy-"..ug_pipe.name,
         position = world_to_bp(ug_pipe.position),
         direction = ug_pipe.direction,
       }
