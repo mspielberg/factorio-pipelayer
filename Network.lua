@@ -2,8 +2,9 @@ local Constants = require "Constants"
 local Graph = require "Graph"
 local PipeConnections = require "PipeConnections"
 
-local function debug(...)
-  log(...)
+local debug = function() end
+if Constants.DEBUG_ENABLED then
+  debug = log
 end
 
 local SURFACE_NAME = Constants.SURFACE_NAME
@@ -76,6 +77,7 @@ function Network.new()
   }
   setmetatable(self, {__index = Network})
   all_networks[network_id] = self
+  debug("created new network "..network_id)
   return self
 end
 
@@ -84,7 +86,15 @@ function Network.for_entity(entity)
 end
 
 function Network:destroy()
-  debug("destroying network "..self.id)
+  if Constants.DEBUG_ENABLED then
+    for pipe, id in pairs(network_for_entity) do
+      if id == self.id then
+        error("Network destroyed while pipe reference exists for pipe "..pipe.unit_number)
+      end
+    end
+  end
+
+  debug("destroyed network "..self.id)
   all_networks[self.id] = nil
 end
 

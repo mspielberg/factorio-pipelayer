@@ -8,8 +8,9 @@ local UNDERGROUND_TILE_NAME = Constants.UNDERGROUND_TILE_NAME
 local editor_surface
 local player_state
 
-local function debug(...)
-  log(...)
+local debug = function() end
+if Constants.DEBUG_ENABLED then
+  debug = log
 end
 
 function M.on_init()
@@ -123,11 +124,9 @@ local function connected_networks(entity)
 end
 
  function M.connect_underground_pipe(entity)
-  debug(serpent.line{entity=entity,neighbours=entity.neighbours})
   local networks = connected_networks(entity)
   if not next(networks) then
     local network = Network:new()
-    debug("created new network "..network.id)
     network:add_underground_pipe(entity)
     return network
   end
@@ -226,6 +225,7 @@ function M.on_player_built_entity(event)
 end
 
 function M.on_robot_built_entity(_, entity, _)
+  if not entity.valid then return end
   if entity.name == "pipefitter-connector" then
     built_surface_connector(nil, entity)
   end

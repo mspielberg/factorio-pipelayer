@@ -3,15 +3,15 @@ local Editor = require "Editor"
 local Network = require "Network"
 
 local function on_init()
-  Blueprint.on_init()
-  Editor.on_init()
   Network.on_init()
+  Editor.on_init()
+  Blueprint.on_init()
 end
 
 local function on_load()
-  Blueprint.on_load()
-  Editor.on_load()
   Network.on_load()
+  Editor.on_load()
+  Blueprint.on_load()
 end
 
 local event_handlers = {
@@ -33,7 +33,7 @@ local event_handlers = {
   end,
 
   on_pre_player_mined_item = function(event)
-    Blueprint.on_pre_player_mined_item(event.player_index, event.entity)
+    Blueprint.on_pre_player_mined_item(event)
   end,
 
   on_player_mined_entity = function(event)
@@ -49,16 +49,11 @@ local event_handlers = {
     Editor.on_robot_mined_entity(robot, entity, buffer)
   end,
 
-  on_pre_ghost_deconstructed = function(event)
-    Blueprint.on_pre_player_mined_item(event.player_index, event.ghost)
-  end,
-
   on_player_setup_blueprint = function(event)
     Blueprint.on_player_setup_blueprint(event)
   end,
 
   on_put_item = function(event)
-    Blueprint.on_put_item(event)
   end,
 
   on_player_deconstructed_area = function(event)
@@ -83,7 +78,6 @@ local function on_toggle_editor(event)
 end
 
 local function on_tick()
-  Blueprint.on_tick()
   Network.update_all()
 end
 

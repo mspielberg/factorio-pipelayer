@@ -2,7 +2,7 @@ require "util"
 
 local function add_tint(proto, tint)
   local pictures
-  if proto.type == "pipe" then
+  if proto.type == "pipe" or proto.type == "pipe-to-ground" then
     pictures = proto.pictures
   elseif proto.type == "storage-tank" then
     pictures = proto.pictures.picture
@@ -19,6 +19,7 @@ end
 local function make_proxy(proto)
   local proxy_proto = util.table.deepcopy(proto)
   proxy_proto.name = "pipefitter-bpproxy-"..proto.name
+  proxy_proto.localised_name = {"entity-name.pipefitter-bpproxy", proto.localised_name or {"entity-name."..proto.name}}
   proxy_proto.collision_mask = {}
   proxy_proto.flags = {"player-creation", "placeable-off-grid"}
   proxy_proto.placeable_by = proxy_proto.placeable_by or {{item=proto.minable.result, count=1}}
@@ -30,10 +31,10 @@ local connector_proxy = make_proxy(data.raw["storage-tank"]["pipefitter-connecto
 connector_proxy.placeable_by[1].count = 0
 data:extend{connector_proxy}
 
-for _, proto in pairs(data.raw["pipe"]) do
-  if not proto.name:find("^pipefitter%-bpproxy%-") then
-    local proxy = make_proxy(proto)
-    log("adding entity "..proxy.type..","..proxy.name)
-    data:extend{proxy}
+for _, type in ipairs{"pipe", "pipe-to-ground"} do
+  for _, proto in pairs(data.raw[type]) do
+    if not proto.name:find("^pipefitter%-bpproxy%-") then
+      data:extend{make_proxy(proto)}
+    end
   end
 end
