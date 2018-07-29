@@ -101,7 +101,20 @@ local pipe_request_chest = {
   name = "pipefitter-pipe-request-chest",
   icon = "__core__/graphics/empty.png",
   icon_size = 1,
-  flags = {},
+  flags = {"not-on-map"},
+  collision_box = {{-0.3, -0.3}, {0.3, 0.3}},
+  collision_mask = {},
+  inventory_size = 100,
+  picture = empty_sprite,
+}
+
+local pipe_dump_chest = {
+  type = "container",
+  name = "pipefitter-pipe-dump-chest",
+  icon = "__core__/graphics/empty.png",
+  icon_size = 1,
+  flags = {"player-creation"},
+  minable = {mining_time = 0.5},
   collision_box = {{-0.3, -0.3}, {0.3, 0.3}},
   selection_box = {{-0.5, -0.5}, {0.5, 0.5}},
   collision_mask = {},
@@ -112,4 +125,5 @@ local pipe_request_chest = {
 data:extend{
   connector,
   pipe_request_chest,
+  pipe_dump_chest,
 }

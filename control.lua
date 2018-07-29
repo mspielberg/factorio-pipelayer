@@ -41,6 +41,14 @@ local event_handlers = {
     Editor.on_player_mined_entity(event)
   end,
 
+  on_robot_mined_entity = function(event)
+    local robot = event.robot
+    local entity = event.entity
+    local buffer = event.buffer
+    Blueprint.on_robot_mined_entity(robot, entity, buffer)
+    Editor.on_robot_mined_entity(robot, entity, buffer)
+  end,
+
   on_pre_ghost_deconstructed = function(event)
     Blueprint.on_pre_player_mined_item(event.player_index, event.ghost)
   end,
@@ -51,6 +59,14 @@ local event_handlers = {
 
   on_put_item = function(event)
     Blueprint.on_put_item(event)
+  end,
+
+  on_player_deconstructed_area = function(event)
+    Blueprint.on_player_deconstructed_area(event.player_index, event.area, event.item, event.alt)
+  end,
+
+  on_canceled_deconstruction = function(event)
+    Blueprint.on_canceled_deconstruction(event.entity, event.player_index)
   end,
 
   on_player_rotated_entity = function(event)
@@ -67,7 +83,7 @@ local function on_toggle_editor(event)
 end
 
 local function on_tick()
-  Blueprint.build_underground_ghosts()
+  Blueprint.on_tick()
   Network.update_all()
 end
 

@@ -1,5 +1,6 @@
 local Constants = require "Constants"
 local Editor = require "Editor"
+require "util"
 
 local SURFACE_NAME = Constants.SURFACE_NAME
 
@@ -17,6 +18,10 @@ local M = {}
       },
     }
   }
+]]
+local ghost_info_for_position
+
+--[[
   -- once chest is built
   ghost_info_for_chest[pipe_request_chest_unit_number] = {
     chest = pipe_request_chest_entity,
@@ -24,8 +29,19 @@ local M = {}
     pipe_counts = ghost_info_for_position[chest.position.x][chest.position.y].pipe_counts,
   }
 ]]
-local ghost_info_for_position
 local ghost_info_for_chest
+
+--[[
+  -- On update on or after this tick_to_deconstruct, destroy all pipes and
+  -- place them in a new surface chest at x,y, marked for deconstruction.
+  deconstruction_info[x] = {
+    [y] = {
+      tick_to_deconstruct = 12345,
+      pipes = { underground_pipe_entity, ... },
+    }
+  }
+]]
+local deconstruction_info
 
 local function debug(...)
   log(...)
@@ -36,12 +52,14 @@ function M.on_init()
     for_position = {},
     for_chest = {},
   }
+  global.deconstruction_info = {}
   M.on_load()
 end
 
 function M.on_load()
   ghost_info_for_position = global.ghost_info.for_position
   ghost_info_for_chest = global.ghost_info.for_chest
+  deconstruction_info = global.deconstruction_info
 end
 
 function M.is_setup_bp(stack)
@@ -74,6 +92,16 @@ function M.bounding_box(bp)
     left_top = {x=left, y=top},
     right_bottom = {x=right, y=bottom},
   }
+end
+
+local function find_in_area(surface, area, args)
+  local find_args = util.table.deepcopy(args)
+  if area.left_top.x >= area.right_bottom.x or area.left_top.y >= area.right_bottom.y then
+    find_args.position = area.left_top
+  else
+    find_args.area = area
+  end
+  return surface.find_entities_filtered(find_args)
 end
 
 local function get_ghost_info(position)
@@ -255,6 +283,12 @@ function M.on_player_mined_entity(player_index, entity, buffer)
   end
 end
 
+function M.on_robot_mined_entity(_, entity, buffer)
+  if entity.name == "pipefitter-connector" and entity.surface == game.surfaces.nauvis then
+    cleanup_surface_connector(entity, nil, buffer)
+  end
+end
+
 ------------------------------------------------------------------------------------------------------------------------
 -- capture underground pipes as bpproxy ghosts
 
@@ -269,10 +303,7 @@ function M.on_player_setup_blueprint(event)
   local bp_entities = bp.get_blueprint_entities()
   local area = event.area
 
-  local anchor_connector = surface.find_entities_filtered{
-    area = area,
-    name = "pipefitter-connector",
-  }[1]
+  local anchor_connector = find_in_area(surface, area, { name = "pipefitter-connector"})[1]
   if not anchor_connector then return end
 
   local pipefitter_surface = game.surfaces[SURFACE_NAME]
@@ -290,7 +321,7 @@ function M.on_player_setup_blueprint(event)
     end
   end
 
-  for _, ug_pipe in ipairs(pipefitter_surface.find_entities(area)) do
+  for _, ug_pipe in ipairs(find_in_area(pipefitter_surface, area, {})) do
     if ug_pipe.name ~= "entity-ghost" then
       bp_entities[#bp_entities + 1] = {
         entity_number = #bp_entities + 1,
@@ -330,7 +361,7 @@ local function cleanup_pipe_request_chest(chest, chest_inventory)
   end
 end
 
-function M.build_underground_ghosts()
+local function build_underground_ghosts()
   for chest_unit_number, ghost_info in pairs(ghost_info_for_chest) do
     local chest = ghost_info.chest
     local ghosts = ghost_info.ghosts
@@ -362,6 +393,97 @@ function M.build_underground_ghosts()
       ghost_info_for_chest[chest_unit_number] = nil
     end
   end
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- Deconstruction of surface connectors
+
+function M.on_player_deconstructed_area(player_index, area, _, alt)
+  if alt then return end
+  local player = game.players[player_index]
+  local nauvis = game.surfaces.nauvis
+  if player.surface ~= nauvis then return end
+  local selected_connectors = find_in_area(nauvis, area, {name = "pipefitter-connector"})
+  if not next(selected_connectors) then return end
+
+  local main_connector = selected_connectors[1]
+  local connector_position = main_connector.position
+  local editor_surface = game.surfaces[SURFACE_NAME]
+  local pipes_to_deconstruct = {}
+  for _, pipe in ipairs(find_in_area(editor_surface, area, {})) do
+    if pipe.name ~= "pipefitter-connector" then
+      pipes_to_deconstruct[#pipes_to_deconstruct + 1] = pipe
+      pipe.order_deconstruction(pipe.force)
+    end
+  end
+
+  if not deconstruction_info[connector_position.x] then deconstruction_info[connector_position.x] = {} end
+  local delay = settings.global["pipefitter-deconstruction-delay"].value
+  deconstruction_info[connector_position.x][connector_position.y] = {
+    tick_to_deconstruct = game.tick + delay * 60,
+    pipes = pipes_to_deconstruct,
+  }
+
+  player.print({"pipefitter-message.marked-for-deconstruction", #pipes_to_deconstruct, delay})
+end
+
+function M.on_canceled_deconstruction(entity, _)
+  if entity.surface ~= game.surfaces.nauvis then return end
+  local position = entity.position
+  local info = deconstruction_info[position.x] and deconstruction_info[position.x][position.y]
+  if info then
+    for _, pipe in ipairs(info.pipes) do
+      if pipe.valid then
+        pipe.cancel_deconstruction(pipe.force)
+      end
+    end
+    deconstruction_info[position.x][position.y] = nil
+  end
+end
+
+local function dump_to_chest(position, pipes)
+  local pipes_to_insert = {}
+  local force
+  for _, pipe in ipairs(pipes) do
+    if pipe.valid and pipe.to_be_deconstructed(pipe.force) then
+      if not force then force = pipe.force end
+      local pipe_name = pipe.name
+      pipes_to_insert[pipe_name] = (pipes_to_insert[pipe_name] or 0) + 1
+      Editor.disconnect_underground_pipe(pipe)
+      pipe.destroy()
+    end
+  end
+
+  if not next(pipes_to_insert) then return end
+
+  local dump_chest = game.surfaces.nauvis.create_entity{
+    name = "pipefitter-pipe-dump-chest",
+    position = position,
+    force = force,
+  }
+  dump_chest.operable = false
+  local chest_inventory = dump_chest
+  for name, count in pairs(pipes_to_insert) do
+    chest_inventory.insert{name = name, count = count}
+  end
+  dump_chest.order_deconstruction(force)
+end
+
+local function check_for_deconstruction_ready()
+  local tick = game.tick
+  for x, ys in pairs(deconstruction_info) do
+    for y, info in pairs(ys) do
+      if info.tick_to_deconstruct <= tick then
+        dump_to_chest({x=x, y=y}, info.pipes)
+        ys[y] = nil
+      end
+    end
+  end
+end
+
+function M.on_tick(tick)
+  build_underground_ghosts()
+  check_for_deconstruction_ready()
 end
 
 return M
