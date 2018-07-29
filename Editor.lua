@@ -82,11 +82,15 @@ end
 
 local function return_player_from_editor(player)
   local player_index = player.index
-  player.clean_cursor()
-  player.get_main_inventory().clear()
-  player.get_quickbar().clear()
-  player.teleport(player_state[player_index].position, player_state[player_index].surface)
-  player.character = player_state[player_index].character
+  if player_state[player_index].character then
+    player.clean_cursor()
+    player.get_main_inventory().clear()
+    player.get_quickbar().clear()
+    player.teleport(player_state[player_index].position, player_state[player_index].surface)
+    player.character = player_state[player_index].character
+  else
+    player.teleport(player_state[player_index].position, player_state[player_index].surface)
+  end
   player_state[player_index] = nil
 end
 
