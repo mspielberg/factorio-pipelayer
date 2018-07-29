@@ -418,13 +418,15 @@ function M.on_player_deconstructed_area(player_index, area, _, alt)
   end
 
   if not deconstruction_info[connector_position.x] then deconstruction_info[connector_position.x] = {} end
-  local delay = settings.global["pipefitter-deconstruction-delay"].value
+  local delay = settings.get_player_settings(player)["pipefitter-deconstruction-delay"].value
   deconstruction_info[connector_position.x][connector_position.y] = {
     tick_to_deconstruct = game.tick + delay * 60,
     pipes = pipes_to_deconstruct,
   }
 
-  player.print({"pipefitter-message.marked-for-deconstruction", #pipes_to_deconstruct, delay})
+  if settings.get_player_settings(player)["pipefitter-deconstruction-warning"].value then
+    player.print({"pipefitter-message.marked-for-deconstruction", #pipes_to_deconstruct, delay})
+  end
 end
 
 function M.on_canceled_deconstruction(entity, _)
