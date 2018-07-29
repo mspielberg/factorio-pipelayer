@@ -119,7 +119,14 @@ local pipe_dump_chest = {
   selection_box = {{-0.5, -0.5}, {0.5, 0.5}},
   collision_mask = {},
   inventory_size = 100,
-  picture = empty_sprite,
+  picture = {
+    filename = "__base__/graphics/entity/wooden-chest/wooden-chest.png",
+    priority = "extra-high",
+    width = 46,
+    height = 33,
+    shift = {0.25, 0.015625},
+    tint = {r=1, g=1, b=1, a=0.5},
+  },
 }
 
 data:extend{
