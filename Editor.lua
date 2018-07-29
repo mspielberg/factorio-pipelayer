@@ -156,7 +156,7 @@ local function opposite_direction(direction)
   return (direction + 4) % 8
 end
 
-local function built_surface_via(player, entity)
+local function built_surface_connector(player, entity)
   local position = entity.position
   if not editor_surface.is_chunk_generated(position) then
     editor_surface.request_to_generate_chunks(position, 1)
@@ -164,14 +164,14 @@ local function built_surface_via(player, entity)
   end
 
   local direction = opposite_direction(entity.direction)
-  -- check for existing underground via ghost
+  -- check for existing underground connector ghost
   local underground_ghost = editor_surface.find_entity("entity-ghost", position)
-  if underground_ghost and underground_ghost.ghost_name == "plumbing-via" then
+  if underground_ghost and underground_ghost.ghost_name == "plumbing-connector" then
     direction = underground_ghost.direction
   end
 
   local create_args = {
-    name = "plumbing-via",
+    name = "plumbing-connector",
     position = position,
     direction = direction,
     force = entity.force,
@@ -183,11 +183,11 @@ local function built_surface_via(player, entity)
       entity.order_deconstruction(entity.force)
     end
   else
-    local underground_via = editor_surface.create_entity(create_args)
-    underground_via.active = false
-    underground_via.minable = false
-    local network = M.connect_underground_pipe(underground_via)
-    network:add_via(entity, underground_via.unit_number)
+    local underground_connector = editor_surface.create_entity(create_args)
+    underground_connector.active = false
+    underground_connector.minable = false
+    local network = M.connect_underground_pipe(underground_connector)
+    network:add_connector(entity, underground_connector.unit_number)
   end
 end
 
@@ -207,9 +207,9 @@ function M.on_player_built_entity(event)
   if not entity.valid or entity.name == "entity-ghost" then return end
   local surface = entity.surface
 
-  if entity.name == "plumbing-via" then
+  if entity.name == "plumbing-connector" then
     if surface.name == "nauvis" then
-      built_surface_via(player, entity)
+      built_surface_connector(player, entity)
     else
       abort_player_build(player, entity, {"plumbing-error.bad-surface"})
     end
@@ -219,18 +219,18 @@ function M.on_player_built_entity(event)
 end
 
 function M.on_robot_built_entity(_, entity, _)
-  if entity.name == "plumbing-via" then
-    built_surface_via(nil, entity)
+  if entity.name == "plumbing-connector" then
+    built_surface_connector(nil, entity)
   end
 end
 
-local function mined_surface_via(entity)
-  local underground_via = editor_surface.find_entity("plumbing-via", entity.position)
-  local network = Network.for_entity(underground_via)
+local function mined_surface_connector(entity)
+  local underground_connector = editor_surface.find_entity("plumbing-connector", entity.position)
+  local network = Network.for_entity(underground_connector)
   if network then
-    network:remove_underground_pipe(underground_via)
+    network:remove_underground_pipe(underground_connector)
   end
-  underground_via.destroy()
+  underground_connector.destroy()
 end
 
 local function return_to_character_inventory(player_index, character, buffer)
@@ -267,27 +267,27 @@ function M.on_player_mined_entity(event)
   local surface = entity.surface
   if surface == editor_surface then
     player_mined_from_editor(event)
-  elseif surface.name == "nauvis" and entity.name == "plumbing-via" then
-    mined_surface_via(entity)
+  elseif surface.name == "nauvis" and entity.name == "plumbing-connector" then
+    mined_surface_connector(entity)
   end
 end
 
 function M.on_player_rotated_entity(event)
   local entity = event.entity
   if entity.surface ~= editor_surface then return end
-  local surface_via = game.surfaces.nauvis.find_entity("plumbing-via", entity.position)
+  local surface_connector = game.surfaces.nauvis.find_entity("plumbing-connector", entity.position)
   local old_network = Network.for_entity(entity)
   local new_networks = connected_networks(entity)
   if old_network:is_singleton() and not next(new_networks) then
     return
   end
-  if surface_via then
-    old_network:remove_via(entity.unit_number)
+  if surface_connector then
+    old_network:remove_connector(entity.unit_number)
   end
   old_network:remove_underground_pipe(entity)
   local new_network = M.connect_underground_pipe(entity)
-  if surface_via then
-    new_network:add_via(surface_via, entity.unit_number)
+  if surface_connector then
+    new_network:add_connector(surface_connector, entity.unit_number)
   end
 end
 

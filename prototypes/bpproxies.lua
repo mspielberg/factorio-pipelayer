@@ -27,9 +27,9 @@ local function make_proxy(proto)
   return proxy_proto
 end
 
-local via_proxy = make_proxy(data.raw["storage-tank"]["plumbing-via"])
-via_proxy.placeable_by[1].count = 0
-data:extend{via_proxy}
+local connector_proxy = make_proxy(data.raw["storage-tank"]["plumbing-connector"])
+connector_proxy.placeable_by[1].count = 0
+data:extend{connector_proxy}
 
 for _, proto in pairs(data.raw["pipe"]) do
   if not proto.name:find("^plumbing%-bpproxy%-") then

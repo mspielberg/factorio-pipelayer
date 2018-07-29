@@ -9,20 +9,20 @@ local empty_sprite = {
 
 local ug = data.raw["pipe-to-ground"]["pipe-to-ground"]
 
-local via = {
+local connector = {
   type = "storage-tank",
-  name = "plumbing-via",
+  name = "plumbing-connector",
   icon = ug.icon,
   icon_size = ug.icon_size,
   flags = ug.flags,
-  minable = {mining_time = 1.5, result = "plumbing-via"},
+  minable = {mining_time = 1.5, result = "plumbing-connector"},
   max_health = ug.max_health,
   corpse = ug.corpse,
   resistances = ug.resistances,
   collision_box = ug.collision_box,
   selection_box = ug.selection_box,
   fluid_box = {
-    base_area = Constants.VIA_CAPACITY / 100,
+    base_area = Constants.CONNECTOR_CAPACITY / 100,
     pipe_covers = pipecoverspictures(),
     pipe_connections = {
       { position = {0, -1} },
@@ -110,6 +110,6 @@ local pipe_request_chest = {
 }
 
 data:extend{
-  via,
+  connector,
   pipe_request_chest,
 }
