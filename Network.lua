@@ -3,7 +3,7 @@ local Graph = require "Graph"
 local PipeConnections = require "PipeConnections"
 
 local function debug(...)
-  game.print(...)
+  log(...)
 end
 
 local SURFACE_NAME = Constants.SURFACE_NAME
