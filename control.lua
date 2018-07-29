@@ -25,7 +25,11 @@ local event_handlers = {
   end,
 
   on_robot_built_entity = function(event)
-    Editor.on_robot_built_entity(event.robot, event.created_entity, event.stack)
+    local robot = event.robot
+    local entity = event.created_entity
+    local stack = event.stack
+    Blueprint.on_robot_built_entity(robot, entity, stack)
+    Editor.on_robot_built_entity(robot, entity, stack)
   end,
 
   on_pre_player_mined_item = function(event)

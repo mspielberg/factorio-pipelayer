@@ -6,28 +6,42 @@ local SURFACE_NAME = Constants.SURFACE_NAME
 local M = {}
 
 --[[
-  editor_ghosts[pipe_request_chest_unit_number] = {
+  -- before surface via & chest are built
+  ghost_info_for_position[x] = {
+    [y] = {
+      ghosts = {
+        [ghost_unit_number] = underground_pipe_ghost_entity,
+      },
+      pipe_counts = {
+        [pipe_name] = 42, -- number of ghosts still existing associated with this chest
+      },
+    }
+  }
+  -- once chest is built
+  ghost_info_for_chest[pipe_request_chest_unit_number] = {
     chest = pipe_request_chest_entity,
-    ghosts = {
-      [ghost_unit_number] = underground_pipe_ghost_entity,
-    },
-    pipe_counts = {
-      [pipe_name] = 42, -- number of ghosts still existing associated with this chest
-    },
+    ghosts = ghost_info_for_position[chest.position.x][chest.position.y].ghosts,
+    pipe_counts = ghost_info_for_position[chest.position.x][chest.position.y].pipe_counts,
   }
 ]]
-local editor_ghosts
+local ghost_info_for_position
+local ghost_info_for_chest
 
 local function debug(...)
   log(...)
 end
 
 function M.on_init()
-  global.editor_ghosts = {}
+  global.ghost_info = {
+    for_position = {},
+    for_chest = {},
+  }
+  M.on_load()
 end
 
 function M.on_load()
-  editor_ghosts = global.editor_ghosts
+  ghost_info_for_position = global.ghost_info.for_position
+  ghost_info_for_chest = global.ghost_info.for_chest
 end
 
 function M.is_setup_bp(stack)
@@ -62,61 +76,70 @@ function M.bounding_box(bp)
   }
 end
 
--- encapsulates all inter-event state between on_built_entity events that happen
--- as a result of placing a blueprint
-do
-  local pipe_request_chest
-  local pipe_request_proxy
-  local pending_pipe_ghosts
-  local pending_pipe_counts
-
-  local function create_pipe_request_proxy()
-    debug("creating pipe_request_proxy")
-    pipe_request_proxy = pipe_request_chest.surface.create_entity{
-      name = "item-request-proxy",
-      position = pipe_request_chest.position,
-      force = pipe_request_chest.force,
-      target = pipe_request_chest,
-      modules = pending_pipe_counts,
-    }
-    pipe_request_proxy.last_user = pipe_request_chest.last_user
+local function get_ghost_info(position)
+  local ys = ghost_info_for_position[position.x]
+  if ys then
+    return ys[position.y]
   end
+  return nil
+end
+
+local function on_built_surface_via(surface_via)
+  local position = surface_via.position
+  local ghost_info = get_ghost_info(position)
+  if not ghost_info then return end
+
+  ghost_info_for_position[position.x][position.y] = nil
+  local surface = surface_via.surface
+  local force = surface_via.force
+  local last_user = surface_via.last_user
+
+  local pipe_request_chest = surface.create_entity{
+    name = "plumbing-pipe-request-chest",
+    position = position,
+    force = force,
+  }
+  pipe_request_chest.operable = false
+  pipe_request_chest.last_user = last_user
+
+  local pipe_request_proxy = surface.create_entity{
+    name = "item-request-proxy",
+    position = position,
+    force = force,
+    target = pipe_request_chest,
+    modules = ghost_info.pipe_counts,
+  }
+
+  pipe_request_proxy.last_user = last_user
+
+  ghost_info_for_chest[pipe_request_chest.unit_number] = {
+    chest = pipe_request_chest,
+    ghosts = ghost_info.ghosts,
+    pipe_counts = ghost_info.pipe_counts,
+  }
+end
+
+do
+  -- encapsulates all inter-event state between on_built_entity events that happen
+  -- as a result of placing a blueprint
+  local built_first_via_ghost
+  local pipe_ghosts
+  local pipe_counts
 
   local function add_item_request(ghost, name)
-    pending_pipe_counts[name] = (pending_pipe_counts[name] or 0) + 1
-    pending_pipe_ghosts[ghost.unit_number] = ghost
+    pipe_counts[name] = (pipe_counts[name] or 0) + 1
+    pipe_ghosts[ghost.unit_number] = ghost
   end
 
-  -- runs func at end of current tick, i.e. after all blueprint ghosts have been placed
-  local function defer(func)
-    script.on_event(defines.events.on_tick, function(event)
-      func(event)
-      script.on_event(defines.events.on_tick, nil)
-    end)
-  end
-
-  local function player_built_surface_via_ghost(entity)
-    defer(function(_)
-      local position = entity.position
-      local surface = entity.surface
-      if not pipe_request_chest then
-        pipe_request_chest = surface.create_entity{
-          name = "plumbing-pipe-request-chest",
-          position = position,
-          force = entity.force,
-        }
-        pipe_request_chest.operable = false
-        pipe_request_chest.last_user = entity.last_user
-        editor_ghosts[pipe_request_chest.unit_number] = {
-          chest = pipe_request_chest,
-          ghosts = pending_pipe_ghosts,
-          pipe_counts = pending_pipe_counts,
-        }
-      end
-      if not pipe_request_proxy and next(pending_pipe_counts) then
-        create_pipe_request_proxy()
-      end
-    end)
+  local function player_built_surface_via_ghost(ghost)
+    if built_first_via_ghost then return end
+    built_first_via_ghost = true
+    local position = ghost.position
+    ghost_info_for_position[position.x] = ghost_info_for_position[position.x] or {}
+    ghost_info_for_position[position.x][position.y] = {
+      ghosts = pipe_ghosts,
+      pipe_counts = pipe_counts,
+    }
   end
 
   -- converts overworld bpproxy ghost to regular ghost underground
@@ -146,18 +169,31 @@ do
   function M.on_player_built_entity(event)
     local entity = event.created_entity
     if entity.surface ~= game.surfaces.nauvis then return end
-    if entity.name ~= "entity-ghost" then return end
-    if entity.ghost_name == "plumbing-via" then return player_built_surface_via_ghost(entity) end
 
-    local nonproxy_name = entity.ghost_name:match("^plumbing%-bpproxy%-(.*)$")
-    if nonproxy_name then return player_built_plumbing_bpproxy_ghost(entity, nonproxy_name) end
+    if entity.name == "plumbing-via" then
+      return on_built_surface_via(entity)
+    elseif entity.name == "entity-ghost" then
+      if entity.ghost_name == "plumbing-via" then
+        return player_built_surface_via_ghost(entity)
+      end
+
+      local nonproxy_name = entity.ghost_name:match("^plumbing%-bpproxy%-(.*)$")
+      if nonproxy_name then
+        return player_built_plumbing_bpproxy_ghost(entity, nonproxy_name)
+      end
+    end
+  end
+
+  function M.on_robot_built_entity(_, entity, _)
+    if entity.name == "plumbing-via" and entity.surface == game.surfaces.nauvis then
+      return on_built_surface_via(entity)
+    end
   end
 
   function M.on_put_item(_)
-    pipe_request_chest = nil
-    pipe_request_proxy = nil
-    pending_pipe_ghosts = {}
-    pending_pipe_counts = {}
+    built_first_via_ghost = false
+    pipe_ghosts = {}
+    pipe_counts = {}
   end
 end
 
@@ -180,7 +216,7 @@ local function cleanup_surface_via(surface_via, player, insertable)
         insert_or_spill(insertable, player, stack)
       end
     end
-    editor_ghosts[chest.unit_number] = nil
+    ghost_info_for_chest[chest.unit_number] = nil
     chest.destroy()
   end
 end
@@ -295,10 +331,10 @@ local function cleanup_pipe_request_chest(chest, chest_inventory)
 end
 
 function M.build_underground_ghosts()
-  for chest_unit_number, chest_info in pairs(editor_ghosts) do
-    local chest = chest_info.chest
-    local ghosts = chest_info.ghosts
-    local pipe_counts = chest_info.pipe_counts
+  for chest_unit_number, ghost_info in pairs(ghost_info_for_chest) do
+    local chest = ghost_info.chest
+    local ghosts = ghost_info.ghosts
+    local pipe_counts = ghost_info.pipe_counts
     if chest.valid then
       local chest_inventory = chest.get_inventory(defines.inventory.chest)
       local can_build = count_can_build(chest_inventory, pipe_counts)
@@ -320,10 +356,10 @@ function M.build_underground_ghosts()
 
       if not next(ghosts) then
         cleanup_pipe_request_chest(chest, chest_inventory)
-        editor_ghosts[chest_unit_number] = nil
+        ghost_info_for_chest[chest_unit_number] = nil
       end
     else
-      editor_ghosts[chest_unit_number] = nil
+      ghost_info_for_chest[chest_unit_number] = nil
     end
   end
 end
