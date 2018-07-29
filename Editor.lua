@@ -142,6 +142,13 @@ end
   return main_network
 end
 
+function M.disconnect_underground_pipe(entity)
+  local network = Network.for_entity(entity)
+  if network then
+    network:remove_underground_pipe(entity)
+  end
+end
+
 local function abort_player_build(player, entity)
   player.insert({name = entity.name, count = 1})
   entity.surface.create_entity{
@@ -226,10 +233,7 @@ end
 
 local function mined_surface_connector(entity)
   local underground_connector = editor_surface.find_entity("pipefitter-connector", entity.position)
-  local network = Network.for_entity(underground_connector)
-  if network then
-    network:remove_underground_pipe(underground_connector)
-  end
+  M.disconnect_underground_pipe(underground_connector)
   underground_connector.destroy()
 end
 
@@ -251,11 +255,7 @@ local function return_to_character_inventory(player_index, character, buffer)
 end
 
 local function player_mined_from_editor(event)
-  local entity = event.entity
-  local network = Network.for_entity(entity)
-  if network then
-    network:remove_underground_pipe(entity)
-  end
+  M.disconnect_underground_pipe(event.entity)
   local character = player_state[event.player_index].character
   if character then
     return_to_character_inventory(event.player_index, character, event.buffer)
@@ -268,6 +268,13 @@ function M.on_player_mined_entity(event)
   if surface == editor_surface then
     player_mined_from_editor(event)
   elseif surface.name == "nauvis" and entity.name == "pipefitter-connector" then
+    mined_surface_connector(entity)
+  end
+end
+
+function M.on_robot_mined_entity(_, entity, _)
+  local surface = entity.surface
+  if surface.name == "nauvis" and entity.name == "pipefitter-connector" then
     mined_surface_connector(entity)
   end
 end
