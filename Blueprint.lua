@@ -124,9 +124,19 @@ end
 local function on_player_built_ghost(ghost)
   local pipe_name = nonproxy_name(ghost.ghost_name)
   if pipe_name then
+    if editor_surface.find_entity("entity-ghost", ghost.position) then
+      ghost.destroy()
+      return
+    end
     return on_player_built_bpproxy_ghost(ghost, pipe_name)
   end
   if ghost.surface == editor_surface then
+    local surface_ghost = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
+    if surface_ghost and
+      (surface_ghost.ghost_name == "pipefitter-connector" or nonproxy_name(surface_ghost.ghost_name)) then
+      ghost.destroy()
+      return
+    end
     return on_player_built_underground_ghost(ghost)
   end
 end
@@ -263,6 +273,7 @@ local function order_underground_deconstruction(player, area)
         force = pipe.force,
         direction = pipe.direction,
       }
+      proxy.destructible = false
       proxy.order_deconstruction(proxy.force, player)
       pipe.order_deconstruction(pipe.force)
       num_to_deconstruct = num_to_deconstruct + 1

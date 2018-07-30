@@ -11,8 +11,18 @@ local connection_type = {
   ["assembling-machine-3"] = {
     [0] = { [-2] = "input", [2] = "output" },
   },
-  ["pump"] = {
-    [0] = { [-1.5] = "output", [1.5] = "input" },
+  ["boiler"] = {
+    [0] = { [-1.5] = "output" },
+  },
+  ["chemical-plant"] = {
+    [-1] = { [-2] = "input", [2] = "output" },
+    [1] = { [-2] = "input", [2] = "output" },
+  },
+  ["heat-exchanger"] = {
+    [0] = { [-1.5] = "output" },
+  },
+  ["offshore-pump"] = {
+    [0] = { [1] = "output" },
   },
   ["oil-refinery"] = {
     [-1] = { [3] = "input" },
@@ -21,9 +31,8 @@ local connection_type = {
     [0] = { [-3] = "output" },
     [2] = { [-3] = "output" },
   },
-  ["chemical-plant"] = {
-    [-1] = { [-2] = "input", [2] = "output" },
-    [1] = { [-2] = "input", [2] = "output" },
+  ["pump"] = {
+    [0] = { [-1.5] = "output", [1.5] = "input" },
   },
 }
 

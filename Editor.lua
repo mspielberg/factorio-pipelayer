@@ -76,8 +76,10 @@ local function move_player_to_editor(player)
   }
   player.character = nil
   player.teleport(player.position, editor_surface)
-  for _, stack in ipairs(pipe_stacks) do
-    player.insert(stack)
+  if player_state[player_index].character then
+    for _, stack in ipairs(pipe_stacks) do
+      player.insert(stack)
+    end
   end
 end
 
@@ -124,6 +126,7 @@ local function connected_networks(entity)
 end
 
  function M.connect_underground_pipe(entity)
+  entity.active = false
   local networks = connected_networks(entity)
   if not next(networks) then
     local network = Network:new()
@@ -190,7 +193,6 @@ local function built_surface_connector(player, entity)
     end
   else
     local underground_connector = editor_surface.create_entity(create_args)
-    underground_connector.active = false
     underground_connector.minable = false
     local network = M.connect_underground_pipe(underground_connector)
     network:add_connector(entity, underground_connector.unit_number)
@@ -202,7 +204,6 @@ local function player_built_underground_pipe(player_index, entity, stack)
     if character then
       character.remove_item(stack)
     end
-    entity.active = false
     M.connect_underground_pipe(entity)
 end
 
@@ -295,6 +296,13 @@ function M.on_player_rotated_entity(event)
   local new_network = M.connect_underground_pipe(entity)
   if surface_connector then
     new_network:add_connector(surface_connector, entity.unit_number)
+  end
+end
+
+function M.on_entity_died(event)
+  local entity = event.entity
+  if entity.surface == game.surfaces.nauvis and entity.name == "pipefitter-connector" then
+    mined_surface_connector(entity)
   end
 end
 

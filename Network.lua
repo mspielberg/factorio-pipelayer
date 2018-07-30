@@ -105,27 +105,27 @@ function Network:is_singleton()
 end
 
 function Network:absorb(other_network)
-  if not self.fluid_name then
-    self.fluid_name = other_network.fluid_name
-  end
   for _, entity in pairs(other_network.pipes) do
     self:add_underground_pipe(entity)
   end
   for underground_unit_number, connector in pairs(other_network.connectors) do
     self:add_connector(connector, underground_unit_number)
   end
+  if self.fluid_name ~= other_network.fluid_name then
+    self:set_fluid(nil)
+  end
   other_network:destroy()
-  self:update()
+  -- self:update()
 end
 
 function Network:add_connector(above, below_unit_number)
   self.connectors[below_unit_number] = above
-  self:update()
+  -- self:update()
 end
 
 function Network:remove_connector(below_unit_number)
   self.connectors[below_unit_number] = nil
-  self:update()
+  -- self:update()
 end
 
 function Network:add_underground_pipe(entity)
@@ -138,7 +138,7 @@ function Network:add_underground_pipe(entity)
     self.graph:add(unit_number, neighbor.unit_number)
   end
   fill_pipe(entity, self.fluid_name)
-  self:update()
+  -- self:update()
 end
 
 function Network:remove_underground_pipe(entity)
@@ -165,13 +165,13 @@ function Network:remove_underground_pipe(entity)
         self.graph:remove(fragment_pipe_unit_number)
       end
       split_network.graph:remove(unit_number)
-      split_network:update()
+      -- split_network:update()
     end
   end
 
   self.graph:remove(unit_number)
   if next(self.pipes) then
-    self:update()
+    -- self:update()
   else
     self:destroy()
   end
@@ -208,6 +208,17 @@ local function distribute(connectors, fluid_name, fluid_amount, fluid_temperatur
   return fluid_amount - total_to_distribute
 end
 
+local connection_type_cache = {}
+local function connection_type(connector)
+  local unit_number = connector.unit_number
+  local cached = connection_type_cache[unit_number]
+  if not cached then
+    cached = PipeConnections.get_connected_connection_type(connector, 1)
+    connection_type_cache[unit_number] = cached
+  end
+  return cached
+end
+
 function Network:balance()
   local fluid_name = self.fluid_name
   if not fluid_name then return end
@@ -228,7 +239,7 @@ function Network:balance()
       end
       num_connectors = num_connectors + 1
 
-      local type = PipeConnections.get_connected_connection_type(connector, 1)
+      local type = connection_type(connector)
       if type == "input" then
         input_connectors[#input_connectors+1] = connector
       elseif type == "output" then
@@ -240,9 +251,14 @@ function Network:balance()
   local average_temp = (total_amount > 0 and total_temperature / total_amount or 15)
 
   -- distribute fluid by priority
-  total_amount = distribute(input_connectors, fluid_name, total_amount, average_temp)
-  total_amount = distribute(other_connectors, fluid_name, total_amount, average_temp)
-  total_amount = distribute(output_connectors, fluid_name, total_amount, average_temp)
+  local remaining_amount = total_amount
+  for _, connector_set in ipairs{input_connectors, other_connectors, output_connectors} do
+    if remaining_amount > 0 then
+      remaining_amount = distribute(connector_set, fluid_name, remaining_amount, average_temp)
+    end
+  end
+
+  debug("network "..self.id.." balanced "..total_amount.." "..fluid_name.." across "..num_connectors.." connectors")
 end
 
 function Network:foreach_underground_entity(callback)
