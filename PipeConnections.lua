@@ -12,14 +12,18 @@ local connection_type = {
     [0] = { [-2] = "input", [2] = "output" },
   },
   ["boiler"] = {
+    [-2] = { [0.5] = "input" },
     [0] = { [-1.5] = "output" },
+    [2] = { [0.5] = "input" },
   },
   ["chemical-plant"] = {
     [-1] = { [-2] = "input", [2] = "output" },
     [1] = { [-2] = "input", [2] = "output" },
   },
   ["heat-exchanger"] = {
+    [-2] = { [0.5] = "input" },
     [0] = { [-1.5] = "output" },
+    [2] = { [0.5] = "input" },
   },
   ["offshore-pump"] = {
     [0] = { [1] = "output" },
@@ -33,6 +37,12 @@ local connection_type = {
   },
   ["pump"] = {
     [0] = { [-1.5] = "output", [1.5] = "input" },
+  },
+  ["steam-engine"] = {
+    [0] = { [-3] = "input", [3] = "input" },
+  },
+  ["steam-turbine"] = {
+    [0] = { [-3] = "input", [3] = "input" },
   },
 }
 

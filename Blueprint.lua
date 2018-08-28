@@ -235,7 +235,6 @@ end
 
 function M.on_player_mined_entity(_, entity, _)
   if not entity.valid then return end
-  game.print(entity.surface.name)
   if entity.surface == editor_surface then
     return on_player_mined_underground_entity(entity)
   elseif entity.surface == game.surfaces.nauvis then
