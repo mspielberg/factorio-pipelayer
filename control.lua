@@ -77,8 +77,8 @@ local function on_toggle_editor(event)
   Editor.toggle_editor_status_for_player(event.player_index)
 end
 
-local function on_tick()
-  Network.update_all()
+local function on_tick(event)
+  Network.update_all(event.tick)
 end
 
 script.on_init(on_init)

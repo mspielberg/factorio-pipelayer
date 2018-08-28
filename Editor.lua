@@ -195,7 +195,7 @@ local function built_surface_connector(player, entity)
     local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
     local network = M.connect_underground_pipe(underground_connector)
-    network:add_connector(entity, underground_connector.unit_number)
+    network:add_connector_entity(entity, underground_connector.unit_number)
   end
 end
 
@@ -295,7 +295,7 @@ function M.on_player_rotated_entity(event)
   old_network:remove_underground_pipe(entity)
   local new_network = M.connect_underground_pipe(entity)
   if surface_connector then
-    new_network:add_connector(surface_connector, entity.unit_number)
+    new_network:add_connector_entity(surface_connector, entity.unit_number)
   end
 end
 

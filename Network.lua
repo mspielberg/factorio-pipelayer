@@ -5,9 +5,10 @@ local Graph = require "Graph"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
-  -- debug = log
+  debug = log
 end
 
+local CONNECTOR_CAPACITY = Constants.CONNECTOR_CAPACITY
 local SURFACE_NAME = Constants.SURFACE_NAME
 
 local pipe_capacity_cache = {}
@@ -53,6 +54,8 @@ function Network.on_load()
     for _, connector in pairs(network.connectors) do
       Connector.restore(connector)
     end
+    dheap.restore(network.input_connectors)
+    dheap.restore(network.output_connectors)
   end
 end
 
@@ -67,7 +70,7 @@ end
       ...
     },
     connectors = {
-      [underground_unit_number] = connector_aboveground_entity,
+      [underground_unit_number] = Connector(),
       ...
     },
     connector_iter = nil,
@@ -130,15 +133,23 @@ function Network:absorb(other_network)
   -- self:update()
 end
 
-function Network:add_connector(above, below_unit_number)
+function Network:add_connector_entity(above, below_unit_number)
   local connector = Connector.new(above)
   self.connectors[below_unit_number] = connector
-  self:enqueue_connector(connector)
+  self:queue_connector(connector)
+end
+
+function Network:add_connector(connector, below_unit_number)
+  self.connectors[below_unit_number] = connector
+  self:queue_connector(connector)
   -- self:update()
 end
 
 function Network:remove_connector(below_unit_number)
+  local connector = self.connectors[below_unit_number]
   self.connectors[below_unit_number] = nil
+  self.input_connectors:delete(connector)
+  self.output_connectors:delete(connector)
   -- self:update()
 end
 
@@ -193,10 +204,10 @@ end
 
 local function foreach_connector(self, callback)
   for k, connector in pairs(self.connectors) do
-    if connector.valid then
+    if connector.entity.valid then
       callback(connector)
     else
-      self.connectors[k] = nil
+      self:remove_connector(k)
     end
   end
 end
@@ -222,7 +233,7 @@ function Network:set_fluid(fluid_name)
   if not fluid_name then
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
-      local counterpart = surface.find_entity("pipefitter-connector", connector.position)
+      local counterpart = surface.find_entity("pipefitter-connector", connector.entity.position)
       local fluidbox = connector.entity.fluidbox[1]
       if fluidbox and fluidbox.amount > 0 then
         fill_pipe(counterpart, fluidbox.name)
@@ -235,7 +246,8 @@ function Network:infer_fluid_from_connectors()
   local inferred_fluid
   local conflict
   foreach_connector(self, function(connector)
-    local connector_fluidbox = connector.fluidbox[1]
+    debug("examining connector "..serpent.line(connector))
+    local connector_fluidbox = connector.entity.fluidbox[1]
     if connector_fluidbox then
       if inferred_fluid then
         if connector_fluidbox.name ~= inferred_fluid then
@@ -257,36 +269,43 @@ end
 function Network:is_time_for_update(tick)
   local next_input_tick = self.input_connectors:peek()
   local next_output_tick = self.output_connectors:peek()
-  if next_input_tick and next_input_tick > tick
-  or next_output_tick and next_output_tick > tick then
+  if next_input_tick and next_input_tick <= tick
+  or next_output_tick and next_output_tick <= tick then
     return true
   end
   return false
 end
 
 function Network:can_transfer(from, to)
+  if not from or not to then return false end
   local fluid_name = self.fluid_name
-  return from and not from:is_conflicting(fluid_name) and to and not to:is_conflicting(fluid_name)
+  return not from:is_conflicting(fluid_name) and not to:is_conflicting(fluid_name)
 end
 
 function Network:infer_fluid()
   local fluid_name = self:infer_fluid_from_connectors()
+  debug("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
   if fluid_name ~= self.fluid_name then
     self:set_fluid(fluid_name)
   end
 end
 
 function Network:queue_connector(connector)
+  debug("queueing connector: "..serpent.line(connector))
   if connector.flow_est < 0 then
     self.output_connectors:insert(connector.next_tick, connector)
-  else
+  elseif connector.flow_est > 0 then
     self.input_connectors:insert(connector.next_tick, connector)
+  elseif connector.prev_amount > CONNECTOR_CAPACITY / 2 then
+    self.input_connectors:insert(connector.next_tick, connector)
+  else
+    self.output_connectors:insert(connector.next_tick, connector)
   end
 end
 
 function Network:update(tick)
   if not self.fluid_name then
-    if tick % 1000 == 0 then
+    if tick % 60 == 0 then
       self:infer_fluid()
     end
     return
@@ -294,13 +313,17 @@ function Network:update(tick)
 
   if not self:is_time_for_update(tick) then return end
 
+  debug(serpent.block(self.output_connectors))
   local _, next_input_connector = self.input_connectors:pop()
   local _, next_output_connector = self.output_connectors:pop()
+  debug(serpent.block{input=next_input_connector, output=next_output_connector})
   if self:can_transfer(next_input_connector, next_output_connector) then
+    debug(serpent.block{msg="can transfer", input=next_input_connector, output=next_output_connector})
     next_input_connector:transfer_to(tick, self.fluid_name, next_output_connector)
     self.input_connectors:insert(next_input_connector.next_tick, next_input_connector)
     self.output_connectors:insert(next_output_connector.next_tick, next_output_connector)
   else
+    debug("cannot transfer")
     if next_input_connector then
       next_input_connector:estimate_flow(tick)
       next_input_connector:estimate_next_tick()
