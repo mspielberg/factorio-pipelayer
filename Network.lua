@@ -1,6 +1,7 @@
+local Connector = require "Connector"
 local Constants = require "Constants"
+local dheap = require "dheap"
 local Graph = require "Graph"
-local PipeConnections = require "PipeConnections"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
@@ -49,6 +50,9 @@ function Network.on_load()
         network.pipes[unit_number] = nil
       end
     end
+    for _, connector in pairs(network.connectors) do
+      Connector.restore(connector)
+    end
   end
 end
 
@@ -80,7 +84,8 @@ function Network.new()
     graph = Graph.new(),
     pipes = {},
     connectors = {},
-    connector_iter = nil,
+    input_connectors = dheap.new(),
+    output_connectors = dheap.new(),
   }
   setmetatable(self, {__index = Network})
   all_networks[network_id] = self
@@ -126,8 +131,9 @@ function Network:absorb(other_network)
 end
 
 function Network:add_connector(above, below_unit_number)
-  self.connectors[below_unit_number] = above
-  self.connector_iter = nil
+  local connector = Connector.new(above)
+  self.connectors[below_unit_number] = connector
+  self:enqueue_connector(connector)
   -- self:update()
 end
 
@@ -195,27 +201,6 @@ local function foreach_connector(self, callback)
   end
 end
 
--- returns amount of fluid left undistributed
-local function distribute(connectors, fluid_name, fluid_amount, fluid_temperature)
-  local num_connectors = #connectors
-  local total_connector_capacity = Constants.CONNECTOR_CAPACITY * num_connectors
-  local total_to_distribute = fluid_amount
-  if total_to_distribute > total_connector_capacity then
-    total_to_distribute = total_connector_capacity
-  end
-
-  local amount_per_connector = total_to_distribute / num_connectors
-  for _, connector in ipairs(connectors) do
-    connector.fluidbox[1] = {
-      name = fluid_name,
-      temperature = fluid_temperature,
-      amount = amount_per_connector,
-    }
-  end
-
-  return fluid_amount - total_to_distribute
-end
-
 function Network:foreach_underground_entity(callback)
   for unit_number, pipe in pairs(self.pipes) do
     if pipe.valid then
@@ -238,9 +223,9 @@ function Network:set_fluid(fluid_name)
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
       local counterpart = surface.find_entity("pipefitter-connector", connector.position)
-      local fluidbox = connector.fluidbox[1]
+      local fluidbox = connector.entity.fluidbox[1]
       if fluidbox and fluidbox.amount > 0 then
-        fill_pipe(counterpart, connector.fluidbox[1].name)
+        fill_pipe(counterpart, fluidbox.name)
       end
     end)
   end
@@ -269,78 +254,78 @@ function Network:infer_fluid_from_connectors()
   end
 end
 
-local function adjust_connector_to_target(self, connector, fluidbox, target_amount)
-  local fluidboxes = connector.fluidbox
-  local connector_amount = fluidbox and fluidbox.amount or 0
-  local delta = target_amount - connector_amount
-  local network_amount = self.fluid_amount or 0
-  local network_temperature = self.fluid_temperature or 15
-  debug(function() return "before: "..serpent.block{
-    network_id = self.id,
-    network_amount = self.fluid_amount,
-    network_fluid = self.fluid_name,
-    connector_position = connector.position,
-    connector_amount = fluidbox and fluidbox.amount or 0,
-    connector_fluid = fluidbox and fluidbox.name,
-    target_amount = target_amount,
-    delta = delta,
-  } end)
-  if delta > 0 then
-    if delta > network_amount then
-      if network_amount > 0 then
-        fluidboxes[1] = {name = self.fluid_name, temperature = network_temperature, amount = connector_amount + network_amount}
-        self.fluid_amount = 0
-      end
-    else
-      fluidboxes[1] = {name = self.fluid_name, temperature = network_temperature, amount = target_amount}
-      self.fluid_amount = network_amount - delta
-    end
-  elseif delta < 0 then
-    local network_space = network_amount - Constants.NETWORK_CAPACITY
-    if network_space > delta then
-      delta = network_space
-    end
-    local new_temp = (network_amount * network_temperature + connector_amount * fluidbox.temperature) / (network_amount + connector_amount)
-    self.fluid_amount = network_amount - delta - 1
-    self.fluid_temperature = new_temp
-    fluidboxes[1] = {name = self.fluid_name, temperature = fluidbox.temperature, amount = connector_amount + delta + 1}
+function Network:is_time_for_update(tick)
+  local next_input_tick = self.input_connectors:peek()
+  local next_output_tick = self.output_connectors:peek()
+  if next_input_tick and next_input_tick > tick
+  or next_output_tick and next_output_tick > tick then
+    return true
   end
-  debug(function() return "after: "..serpent.block{
-    network_amount = self.fluid_amount,
-    connector_amount = fluidboxes[1] and fluidboxes[1].amount or 0,
-  } end)
+  return false
 end
 
-function Network:update_connector(connector, fluidbox)
-  local type = PipeConnections.get_connected_connection_type(connector, 1)
-  if type == "input" then
-    adjust_connector_to_target(self, connector, fluidbox, Constants.CONNECTOR_CAPACITY)
-  elseif type == "output" then
-    adjust_connector_to_target(self, connector, fluidbox, 0)
+function Network:can_transfer(from, to)
+  local fluid_name = self.fluid_name
+  return from and not from:is_conflicting(fluid_name) and to and not to:is_conflicting(fluid_name)
+end
+
+function Network:infer_fluid()
+  local fluid_name = self:infer_fluid_from_connectors()
+  if fluid_name ~= self.fluid_name then
+    self:set_fluid(fluid_name)
+  end
+end
+
+function Network:queue_connector(connector)
+  if connector.flow_est < 0 then
+    self.output_connectors:insert(connector.next_tick, connector)
   else
-    adjust_connector_to_target(self, connector, fluidbox, Constants.CONNECTOR_CAPACITY / 2)
+    self.input_connectors:insert(connector.next_tick, connector)
   end
 end
 
-function Network:update()
-  local connector
-  self.connector_iter, connector = next(self.connectors, self.connector_iter)
-  if connector then
-    local fluidbox = connector.fluidbox[1]
-    if fluidbox and fluidbox.name ~= self.fluid_name then
-      -- local inferred = self:infer_fluid_from_connectors()
-      -- self:set_fluid(inferred)
+function Network:update(tick)
+  if not self.fluid_name then
+    if tick % 1000 == 0 then
+      self:infer_fluid()
     end
-    self:update_connector(connector, fluidbox)
+    return
+  end
+
+  if not self:is_time_for_update(tick) then return end
+
+  local _, next_input_connector = self.input_connectors:pop()
+  local _, next_output_connector = self.output_connectors:pop()
+  if self:can_transfer(next_input_connector, next_output_connector) then
+    next_input_connector:transfer_to(tick, self.fluid_name, next_output_connector)
+    self.input_connectors:insert(next_input_connector.next_tick, next_input_connector)
+    self.output_connectors:insert(next_output_connector.next_tick, next_output_connector)
+  else
+    if next_input_connector then
+      next_input_connector:estimate_flow(tick)
+      next_input_connector:estimate_next_tick()
+      self:queue_connector(next_input_connector)
+    end
+    if next_output_connector then
+      next_output_connector:estimate_flow(tick)
+      next_output_connector:estimate_next_tick()
+      self:queue_connector(next_output_connector)
+    end
+    if next_input_connector and next_input_connector:is_conflicting(self.fluid_name)
+    or next_output_connector and next_output_connector:is_conflicting(self.fluid_name) then
+      self:set_fluid(nil)
+    end
   end
 end
 
-function Network.update_all()
+function Network.update_all(tick)
   local network
   for i=1,50 do
     global.network_iter, network = next(all_networks, global.network_iter)
     if network then
-      network:update()
+      network:update(tick)
+    else
+      return
     end
   end
 end
