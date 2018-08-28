@@ -13,6 +13,7 @@ function M.new(entity)
   local fluid = entity.fluidbox[1]
   local self = {
     entity = entity,
+    mode = "input",
     prev_amount = fluid and fluid.amount or 0,
     prev_tick = 0,
     flow_est = 0,
@@ -43,8 +44,8 @@ function Connector:estimate_flow(tick, current_amount)
   local interval = tick - self.prev_tick
   if interval == 0 then interval = 1 end
   local amount_delta = current_amount - self.prev_amount
-  local current_flow = amount_delta / interval
-  local flow_est = current_flow --(self.flow_est + current_flow) / 2
+  local current_flow = math.abs(amount_delta / interval)
+  local flow_est = (self.flow_est + current_flow) / 2
   self.flow_est = flow_est
   self.prev_tick = tick
 end
@@ -61,17 +62,17 @@ function Connector:estimate_next_tick(new_amount)
 
   local flow_est = self.flow_est
   local amount_to_saturate
-  if flow_est > 0 then
+  if self.mode == "input" then
     amount_to_saturate = CAPACITY - new_amount
   else
     amount_to_saturate = new_amount
   end
 
   self.prev_amount = new_amount
-  if flow_est < 1 and flow_est > -1 then
+  if flow_est < 0.1 then
     self.next_tick = self.prev_tick + MAX_UPDATE_INTERVAL
   else
-    local time_to_saturate = amount_to_saturate / math.abs(flow_est)
+    local time_to_saturate = amount_to_saturate / flow_est
     self.next_tick = self.prev_tick + math.min(MAX_UPDATE_INTERVAL, time_to_saturate / 2)
   end
 end

@@ -83,22 +83,25 @@ end
 local function delete_at_index(self, n)
   local x = self[n]
   if not x then return end
-  self[n], self[#self] = self[#self], nil
+  self[n] = self[#self]
+  self[#self] = nil
   heapify(self)
   return x[1]
 end
 
+-- returns the minimum priority and the associated value
 function dheap:peek()
   local x = self[0]
   if not x then return end
   return x[1], x[2]
 end
 
--- deletes the node with minimum priotity and returns its priority and value
+-- deletes the node with minimum priority and returns its priority and value
 function dheap:pop()
   local x = self[0]
   if not x then return end
-  self[0], self[#self] = self[#self], nil
+  self[0] = self[#self]
+  self[#self] = nil
 
   heapdown(self, 0)
 
@@ -107,7 +110,8 @@ end
 
 -- deletes the node with value v and returns its priority
 function dheap:delete(v)
-  for i=1,#self do
+  if not self[0] then return end
+  for i=0,#self do
     if self[i][2] == v then
       return delete_at_index(self, i)
     end
@@ -121,7 +125,7 @@ function dheap:tostring(n, d)
     d = 0
   end
   local x = self[n]
-  if not x then return end
+  if not x then return "" end
 
   local indent = {}
   for i=1,d do indent[i] = '  ' end

@@ -202,6 +202,21 @@ function Network:remove_underground_pipe(entity)
   end
 end
 
+function Network:toggle_connector_mode(entity)
+  local connector = Connector.for_entity(entity)
+  local current_mode = connector.mode
+  if current_mode == "input" then
+    connector.mode = "output"
+    self.input_connectors:delete(connector)
+    self.output_connectors:insert(0, connector)
+  else
+    connector.mode = "input"
+    self.output_connectors:delete(connector)
+    self.input_connectors:insert(0, connector)
+  end
+  return connector.mode
+end
+
 local function foreach_connector(self, callback)
   for k, connector in pairs(self.connectors) do
     if connector.entity.valid then
@@ -291,12 +306,7 @@ function Network:infer_fluid()
 end
 
 function Network:queue_connector(connector)
-  debug("queueing connector: "..serpent.line(connector))
-  if connector.flow_est < 0 then
-    self.output_connectors:insert(connector.next_tick, connector)
-  elseif connector.flow_est > 0 then
-    self.input_connectors:insert(connector.next_tick, connector)
-  elseif connector.prev_amount > CONNECTOR_CAPACITY / 2 then
+  if connector.mode == "input" then
     self.input_connectors:insert(connector.next_tick, connector)
   else
     self.output_connectors:insert(connector.next_tick, connector)
@@ -313,9 +323,12 @@ function Network:update(tick)
 
   if not self:is_time_for_update(tick) then return end
 
-  debug(serpent.block(self.output_connectors))
+  debug("before pop")
+  debug(serpent.block({output_connectors = self.output_connectors, input_connectors=self.input_connectors}, {name="_"}))
   local _, next_input_connector = self.input_connectors:pop()
   local _, next_output_connector = self.output_connectors:pop()
+  debug("after pop")
+  debug(serpent.block({output_connectors = self.output_connectors, input_connectors=self.input_connectors}, {name="_"}))
   debug(serpent.block{input=next_input_connector, output=next_output_connector})
   if self:can_transfer(next_input_connector, next_output_connector) then
     debug(serpent.block{msg="can transfer", input=next_input_connector, output=next_output_connector})

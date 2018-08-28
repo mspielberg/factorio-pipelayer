@@ -77,6 +77,10 @@ local function on_toggle_editor(event)
   Editor.toggle_editor_status_for_player(event.player_index)
 end
 
+local function on_toggle_connector_mode(event)
+  Editor.toggle_connector_mode(event.player_index)
+end
+
 local function on_tick(event)
   Network.update_all(event.tick)
 end
@@ -85,6 +89,7 @@ script.on_init(on_init)
 script.on_load(on_load)
 script.on_nth_tick(1, on_tick)
 script.on_event("pipefitter-toggle-editor-view", on_toggle_editor)
+script.on_event("pipefitter-toggle-connector-mode", on_toggle_connector_mode)
 for event_name, handler in pairs(event_handlers) do
   script.on_event(defines.events[event_name], handler)
 end

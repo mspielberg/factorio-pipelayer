@@ -108,6 +108,27 @@ function M.toggle_editor_status_for_player(player_index)
   end
 end
 
+function M.toggle_connector_mode(player_index)
+  local selected = game.players[player_index].selected
+  if not selected or selected.name ~= "pipefitter-connector" then return end
+  local new_mode
+  if selected.surface == editor_surface then
+    local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", selected.position)
+    new_mode = Network.for_entity(selected):toggle_connector_mode(surface_connector)
+  elseif selected.surface == game.surfaces.nauvis then
+    local underground_connector = editor_surface.find_entity("pipefitter-connector", selected.position)
+    new_mode = Network.for_entity(underground_connector):toggle_connector_mode(selected)
+  end
+
+  if new_mode then
+    selected.surface.create_entity{
+      name = "flying-text",
+      position = selected.position,
+      text = {"pipefitter-message.set-connector-mode", {"pipefitter-message.connector-mode-"..new_mode}},
+    }
+  end
+end
+
 local function set_to_list(set)
   local out = {}
   for k in pairs(set) do
