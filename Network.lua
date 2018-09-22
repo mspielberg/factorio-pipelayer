@@ -100,6 +100,7 @@ function Network:destroy()
 
   debug("destroyed network "..self.id)
   all_networks[self.id] = nil
+    global.network_iter = nil
 end
 
 function Network:is_singleton()
