@@ -100,7 +100,9 @@ function Network:destroy()
 
   debug("destroyed network "..self.id)
   all_networks[self.id] = nil
+  if global.network_iter == self.id then
     global.network_iter = nil
+  end
 end
 
 function Network:is_singleton()
@@ -291,7 +293,7 @@ function Network:update(tick)
 
   debug{id=self.network_id, tick=tick, from=next_input_connector.entity.position, output=next_output_connector.entity.position}
   if self:can_transfer(next_input_connector, next_output_connector) then
-    next_input_connector:transfer_to(tick, self.fluid_name, next_output_connector)
+    next_input_connector:transfer_to(self.fluid_name, next_output_connector)
   else
     debug("cannot transfer")
     if next_input_connector:is_conflicting(self.fluid_name)

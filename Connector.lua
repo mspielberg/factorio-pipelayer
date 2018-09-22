@@ -1,4 +1,5 @@
 local Constants = require "Constants"
+local PipeConnections = require "PipeConnections"
 
 local M = {}
 
@@ -14,6 +15,7 @@ function M.new(entity, below_unit_number)
   local fluid = entity.fluidbox[1]
   local self = {
     entity = entity,
+    fluidbox = entity.fluidbox,
     unit_number = entity.unit_number,
     below_unit_number = below_unit_number,
     mode = "input",
@@ -22,7 +24,9 @@ function M.new(entity, below_unit_number)
     flow_est = 0,
     next_tick = 0,
   }
-  return M.restore(self)
+  M.restore(self)
+  self:infer_mode()
+  return self
 end
 
 function M.restore(self)
@@ -39,97 +43,58 @@ function M.for_below_unit_number(id)
   return connector_for_below[id]
 end
 
-function Connector:estimate_flow(tick, current_amount)
-  if not current_amount then
-    local fluidbox = self.entity.fluidbox[1]
-    if fluidbox then
-      current_amount = fluidbox.amount
-    else
-      current_amount = 0
+function M.infer_mode_for_connectors(entity)
+  local fluidbox = entity.fluidbox
+  for i=1,#fluidbox do
+    for _, neighbor in ipairs(entity.neighbours()[i]) do
+      if neighbor.name == "pipefitter-connector" then
+        M.for_entity(neighbor):infer_mode()
+      end
     end
   end
-
-  local interval = tick - self.prev_tick
-  if interval == 0 then interval = 1 end
-  local amount_delta = current_amount - self.prev_amount
-  local current_flow = math.abs(amount_delta / interval)
-  local flow_est = (self.flow_est + current_flow) / 2
-  self.flow_est = flow_est
-  self.prev_tick = tick
-end
-
-function Connector:estimate_next_tick(new_amount)
-  if not new_amount then
-    local fluidbox = self.entity.fluidbox[1]
-    if fluidbox then
-      new_amount = fluidbox.amount
-    else
-      new_amount = 0
-    end
-  end
-
-  local flow_est = self.flow_est
-  local amount_to_saturate
-  if self.mode == "input" then
-    amount_to_saturate = CAPACITY - new_amount
-  else
-    amount_to_saturate = new_amount
-  end
-
-  self.prev_amount = new_amount
-  if flow_est < 0.1 then
-    self.next_tick = self.prev_tick + MAX_UPDATE_INTERVAL
-  else
-    local time_to_saturate = amount_to_saturate / flow_est
-    self.next_tick = self.prev_tick + math.min(MAX_UPDATE_INTERVAL, time_to_saturate / 2)
-  end
-end
-
-function Connector:is_empty()
-  local fluid = self.entity.fluidbox[1]
-  return not fluid
-end
-
-function Connector:is_nonempty()
-  local fluid = self.entity.fluidbox[1]
-  return fluid ~= nil
 end
 
 function Connector:ready_as_input()
-  local fluid = self.entity.fluidbox[1]
+  self.fluidbox = self.fluidbox or self.entity.fluidbox
+  local fluid = self.fluidbox[1]
   return fluid and fluid.amount > CAPACITY / 2
 end
 
 function Connector:ready_as_output()
-  local fluid = self.entity.fluidbox[1]
+  self.fluidbox = self.fluidbox or self.entity.fluidbox
+  local fluid = self.fluidbox[1]
   return not fluid or fluid.amount < CAPACITY / 2
 end
 
-function Connector:is_full()
-  local fluid = self.entity.fluidbox[1]
-  return fluid and fluid.amount == CAPACITY
-end
-
 function Connector:is_conflicting(expected_fluid)
-  local fluid = self.entity.fluidbox[1]
+  self.fluidbox = self.fluidbox or self.entity.fluidbox
+  local fluid = self.fluidbox[1]
   return expected_fluid and fluid and fluid.name ~= expected_fluid
 end
 
-function Connector:transfer_to(tick, expected_fluid, to_connector)
-  local from_fluid = self.entity.fluidbox[1]
-  local to_fluid = to_connector.entity.fluidbox[1]
+function Connector:infer_mode()
+  local connected_mode = PipeConnections.get_connected_connection_type(self.entity, 1)
+  if connected_mode == "input" then
+    self.mode = "output"
+  elseif connected_mode == "output" then
+    self.mode = "input"
+  end
+end
+
+function Connector:transfer_to(expected_fluid, to_connector)
+  self.fluidbox = self.fluidbox or self.entity.fluidbox
+  local from_fluidbox = self.fluidbox
+  local from_fluid = from_fluidbox[1]
+  if not from_fluid then return end
+
+  local to_fluidbox = to_connector.fluidbox
+  local to_fluid = to_fluidbox[1]
 
   local from_amount = from_fluid and from_fluid.amount or 0
   local to_amount = to_fluid and to_fluid.amount or 0
   local space_available = CAPACITY - to_amount
   local amount_to_move = math.min(from_amount, space_available)
-  self:estimate_flow(tick, from_amount)
-  to_connector:estimate_flow(tick, to_amount)
 
-  if not from_fluid then
-    -- no fluid available to transfer
-    return 0
-  end
 
   local from_temperature = from_fluid and from_fluid.temperature or 0
   local to_temperature = to_fluid and to_fluid.temperature or 0
@@ -138,12 +103,10 @@ function Connector:transfer_to(tick, expected_fluid, to_connector)
   local new_to_temperature = (from_weighted_temperature + to_weighted_temperature) / (from_amount + to_amount)
 
   local new_from_amount = from_amount - amount_to_move
-  self.entity.fluidbox[1] = {amount = new_from_amount, name = expected_fluid, temperature = from_temperature}
-  self:estimate_next_tick(new_from_amount)
+  from_fluidbox[1] = {amount = new_from_amount, name = expected_fluid, temperature = from_temperature}
 
   local new_to_amount = to_amount + amount_to_move
-  to_connector.entity.fluidbox[1] = {amount = new_to_amount, name = expected_fluid, temperature = new_to_temperature}
-  to_connector:estimate_next_tick(new_to_amount)
+  to_fluidbox[1] = {amount = new_to_amount, name = expected_fluid, temperature = new_to_temperature}
 
   return amount_to_move
 end
