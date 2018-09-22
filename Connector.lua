@@ -7,12 +7,15 @@ local Connector = {}
 local CAPACITY = Constants.CONNECTOR_CAPACITY
 local MAX_UPDATE_INTERVAL = Constants.MAX_CONNECTOR_UPDATE_INTERVAL
 
-local all_connectors = {}
+local connector_for_above = {}
+local connector_for_below = {}
 
-function M.new(entity)
+function M.new(entity, below_unit_number)
   local fluid = entity.fluidbox[1]
   local self = {
     entity = entity,
+    unit_number = entity.unit_number,
+    below_unit_number = below_unit_number,
     mode = "input",
     prev_amount = fluid and fluid.amount or 0,
     prev_tick = 0,
@@ -23,12 +26,17 @@ function M.new(entity)
 end
 
 function M.restore(self)
-  all_connectors[self.entity.unit_number] = self
+  connector_for_above[self.unit_number] = self
+  connector_for_below[self.below_unit_number] = self
   return setmetatable(self, { __index = Connector })
 end
 
 function M.for_entity(entity)
-  return all_connectors[entity.unit_number]
+  return connector_for_above[entity.unit_number]
+end
+
+function M.for_below_unit_number(id)
+  return connector_for_below[id]
 end
 
 function Connector:estimate_flow(tick, current_amount)
@@ -75,6 +83,31 @@ function Connector:estimate_next_tick(new_amount)
     local time_to_saturate = amount_to_saturate / flow_est
     self.next_tick = self.prev_tick + math.min(MAX_UPDATE_INTERVAL, time_to_saturate / 2)
   end
+end
+
+function Connector:is_empty()
+  local fluid = self.entity.fluidbox[1]
+  return not fluid
+end
+
+function Connector:is_nonempty()
+  local fluid = self.entity.fluidbox[1]
+  return fluid ~= nil
+end
+
+function Connector:ready_as_input()
+  local fluid = self.entity.fluidbox[1]
+  return fluid and fluid.amount > CAPACITY / 2
+end
+
+function Connector:ready_as_output()
+  local fluid = self.entity.fluidbox[1]
+  return not fluid or fluid.amount < CAPACITY / 2
+end
+
+function Connector:is_full()
+  local fluid = self.entity.fluidbox[1]
+  return fluid and fluid.amount == CAPACITY
 end
 
 function Connector:is_conflicting(expected_fluid)

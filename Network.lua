@@ -1,14 +1,13 @@
 local Connector = require "Connector"
+local ConnectorSet = require "ConnectorSet"
 local Constants = require "Constants"
-local dheap = require "dheap"
 local Graph = require "Graph"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
-  debug = log
+  debug = function(x) log(serpent.block(x, {name = "_"})) end
 end
 
-local CONNECTOR_CAPACITY = Constants.CONNECTOR_CAPACITY
 local SURFACE_NAME = Constants.SURFACE_NAME
 
 local pipe_capacity_cache = {}
@@ -51,11 +50,7 @@ function Network.on_load()
         network.pipes[unit_number] = nil
       end
     end
-    for _, connector in pairs(network.connectors) do
-      Connector.restore(connector)
-    end
-    dheap.restore(network.input_connectors)
-    dheap.restore(network.output_connectors)
+    ConnectorSet.restore(network.connectors)
   end
 end
 
@@ -69,11 +64,7 @@ end
       [unit_number] = pipe_entity,
       ...
     },
-    connectors = {
-      [underground_unit_number] = Connector(),
-      ...
-    },
-    connector_iter = nil,
+    connectors = ConnectorSet()
   }
 ]]
 function Network.new()
@@ -86,9 +77,7 @@ function Network.new()
     fluid_temperature = 15,
     graph = Graph.new(),
     pipes = {},
-    connectors = {},
-    input_connectors = dheap.new(),
-    output_connectors = dheap.new(),
+    connectors = ConnectorSet.new(),
   }
   setmetatable(self, {__index = Network})
   all_networks[network_id] = self
@@ -123,34 +112,29 @@ function Network:absorb(other_network)
   for _, entity in pairs(other_network.pipes) do
     self:add_underground_pipe(entity)
   end
-  for underground_unit_number, connector in pairs(other_network.connectors) do
-    self:add_connector(connector, underground_unit_number)
+  for connector in other_network.connectors:all_connectors() do
+    self:add_connector(connector)
   end
   if self.fluid_name ~= other_network.fluid_name then
     self:set_fluid(nil)
   end
   other_network:destroy()
-  -- self:update()
 end
 
 function Network:add_connector_entity(above, below_unit_number)
-  local connector = Connector.new(above)
-  self.connectors[below_unit_number] = connector
-  self:queue_connector(connector)
+  local connector = Connector.new(above, below_unit_number)
+  self:add_connector(connector)
 end
 
-function Network:add_connector(connector, below_unit_number)
-  self.connectors[below_unit_number] = connector
-  self:queue_connector(connector)
-  -- self:update()
+function Network:add_connector(connector)
+  self.connectors:add(connector)
 end
 
-function Network:remove_connector(below_unit_number)
-  local connector = self.connectors[below_unit_number]
-  self.connectors[below_unit_number] = nil
-  self.input_connectors:delete(connector)
-  self.output_connectors:delete(connector)
-  -- self:update()
+function Network:remove_connector_by_below_unit_number(below_unit_number)
+  local connector = Connector.for_below_unit_number(below_unit_number)
+  if connector then
+    self.connectors:remove(connector)
+  end
 end
 
 function Network:add_underground_pipe(entity)
@@ -163,14 +147,13 @@ function Network:add_underground_pipe(entity)
     self.graph:add(unit_number, neighbor.unit_number)
   end
   fill_pipe(entity, self.fluid_name)
-  -- self:update()
 end
 
 function Network:remove_underground_pipe(entity)
   assert(entity.surface.name == SURFACE_NAME)
   local unit_number = entity.unit_number
   self.pipes[unit_number] = nil
-  self:remove_connector(unit_number)
+  self:remove_connector_by_below_unit_number(unit_number)
   network_for_entity[unit_number] = nil
 
   if #entity.neighbours[1] > 1 then
@@ -181,16 +164,15 @@ function Network:remove_underground_pipe(entity)
       local split_network = Network.new()
       for fragment_pipe_unit_number in pairs(fragment) do
         split_network:add_underground_pipe(self.pipes[fragment_pipe_unit_number])
-        if self.connectors[fragment_pipe_unit_number] then
-          split_network:add_connector(self.connectors[fragment_pipe_unit_number], fragment_pipe_unit_number)
-          self:remove_connector(fragment_pipe_unit_number)
+        local connector = Connector.for_below_unit_number(fragment_pipe_unit_number)
+        if connector then
+          split_network:add_connector(connector)
+          self.connectors:remove(connector)
         end
-        network_for_entity[fragment_pipe_unit_number] = split_network
         self.pipes[fragment_pipe_unit_number] = nil
         self.graph:remove(fragment_pipe_unit_number)
       end
       split_network.graph:remove(unit_number)
-      -- split_network:update()
     end
   end
 
@@ -207,22 +189,20 @@ function Network:toggle_connector_mode(entity)
   local current_mode = connector.mode
   if current_mode == "input" then
     connector.mode = "output"
-    self.input_connectors:delete(connector)
-    self.output_connectors:insert(0, connector)
+    self.connectors:add_output(connector)
   else
     connector.mode = "input"
-    self.output_connectors:delete(connector)
-    self.input_connectors:insert(0, connector)
+    self.connectors:add_input(connector)
   end
   return connector.mode
 end
 
 local function foreach_connector(self, callback)
-  for k, connector in pairs(self.connectors) do
+  for connector in self.connectors:all_connectors() do
     if connector.entity.valid then
       callback(connector)
     else
-      self:remove_connector(k)
+      self.connectors:remove(connector)
     end
   end
 end
@@ -281,16 +261,6 @@ function Network:infer_fluid_from_connectors()
   end
 end
 
-function Network:is_time_for_update(tick)
-  local next_input_tick = self.input_connectors:peek()
-  local next_output_tick = self.output_connectors:peek()
-  if next_input_tick and next_input_tick <= tick
-  or next_output_tick and next_output_tick <= tick then
-    return true
-  end
-  return false
-end
-
 function Network:can_transfer(from, to)
   if not from or not to then return false end
   local fluid_name = self.fluid_name
@@ -305,50 +275,26 @@ function Network:infer_fluid()
   end
 end
 
-function Network:queue_connector(connector)
-  if connector.mode == "input" then
-    self.input_connectors:insert(connector.next_tick, connector)
-  else
-    self.output_connectors:insert(connector.next_tick, connector)
-  end
-end
-
 function Network:update(tick)
   if not self.fluid_name then
-    if tick % 60 == 0 then
+    -- if tick % 60 == 0 then
       self:infer_fluid()
-    end
+    -- end
     return
   end
 
-  if not self:is_time_for_update(tick) then return end
+  local next_input_connector = self.connectors:next_input()
+  local next_output_connector = self.connectors:next_output()
 
-  debug("before pop")
-  debug(serpent.block({output_connectors = self.output_connectors, input_connectors=self.input_connectors}, {name="_"}))
-  local _, next_input_connector = self.input_connectors:pop()
-  local _, next_output_connector = self.output_connectors:pop()
-  debug("after pop")
-  debug(serpent.block({output_connectors = self.output_connectors, input_connectors=self.input_connectors}, {name="_"}))
-  debug(serpent.block{input=next_input_connector, output=next_output_connector})
+  if not next_input_connector or not next_output_connector then return end
+
+  debug{id=self.network_id, tick=tick, from=next_input_connector.entity.position, output=next_output_connector.entity.position}
   if self:can_transfer(next_input_connector, next_output_connector) then
-    debug(serpent.block{msg="can transfer", input=next_input_connector, output=next_output_connector})
     next_input_connector:transfer_to(tick, self.fluid_name, next_output_connector)
-    self.input_connectors:insert(next_input_connector.next_tick, next_input_connector)
-    self.output_connectors:insert(next_output_connector.next_tick, next_output_connector)
   else
     debug("cannot transfer")
-    if next_input_connector then
-      next_input_connector:estimate_flow(tick)
-      next_input_connector:estimate_next_tick()
-      self:queue_connector(next_input_connector)
-    end
-    if next_output_connector then
-      next_output_connector:estimate_flow(tick)
-      next_output_connector:estimate_next_tick()
-      self:queue_connector(next_output_connector)
-    end
-    if next_input_connector and next_input_connector:is_conflicting(self.fluid_name)
-    or next_output_connector and next_output_connector:is_conflicting(self.fluid_name) then
+    if next_input_connector:is_conflicting(self.fluid_name)
+    or next_output_connector:is_conflicting(self.fluid_name) then
       self:set_fluid(nil)
     end
   end
@@ -356,8 +302,11 @@ end
 
 function Network.update_all(tick)
   local network
-  for i=1,50 do
+  for i=1,1 do
     global.network_iter, network = next(all_networks, global.network_iter)
+    if not network then
+      global.network_iter, network = next(all_networks, global.network_iter)
+    end
     if network then
       network:update(tick)
     else

@@ -311,7 +311,7 @@ function M.on_player_rotated_entity(event)
     return
   end
   if surface_connector then
-    old_network:remove_connector(entity.unit_number)
+    old_network:remove_connector_by_below_unit_number(entity.unit_number)
   end
   old_network:remove_underground_pipe(entity)
   local new_network = M.connect_underground_pipe(entity)
