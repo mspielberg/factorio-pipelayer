@@ -12,8 +12,13 @@ local ug = data.raw["pipe-to-ground"]["pipe-to-ground"]
 local connector = {
   type = "storage-tank",
   name = "pipelayer-connector",
-  icon = ug.icon,
-  icon_size = ug.icon_size,
+  icons = {
+    {
+      icon = ug.icon,
+      icon_size = ug.icon_size,
+    },
+    overlay_icon,
+  },
   flags = ug.flags,
   minable = {mining_time = 1.5, result = "pipelayer-connector"},
   max_health = ug.max_health,
