@@ -96,6 +96,12 @@ local connector = {
   flow_length_in_ticks = 1,
 }
 
+local bpproxy_output_connector = util.table.deepcopy(connector)
+bpproxy_output_connector.name = "pipefitter-output-connector"
+bpproxy_output_connector.flags = {"player-creation"}
+bpproxy_output_connector.placeable_by = {{item="pipefitter-connector", count=1}}
+
 data:extend{
   connector,
+  bpproxy_output_connector,
 }
