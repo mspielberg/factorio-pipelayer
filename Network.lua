@@ -201,13 +201,17 @@ function Network:toggle_connector_mode(entity)
 end
 
 local function foreach_connector(self, callback)
+  local to_remove = {}
   for connector in self.connectors:all_connectors() do
     if connector.entity.valid then
       callback(connector)
     else
-      self.connectors:remove(connector)
+      to_remove[#to_remove+1] = connector
     end
   end
+  for _, connector in ipairs(to_remove) do
+    self.connectors:remove(connector)
+end
 end
 
 function Network:foreach_underground_entity(callback)
