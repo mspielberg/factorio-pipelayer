@@ -1,7 +1,7 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
 local Constants = require "Constants"
-local Graph = require "Graph"
+local Graph = require "lualib.Graph"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
@@ -211,7 +211,7 @@ local function foreach_connector(self, callback)
   end
   for _, connector in ipairs(to_remove) do
     self.connectors:remove(connector)
-end
+  end
 end
 
 function Network:foreach_underground_entity(callback)
@@ -225,7 +225,7 @@ function Network:foreach_underground_entity(callback)
 end
 
 function Network:set_fluid(fluid_name)
-  debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
+  -- debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   self:foreach_underground_entity(function(entity)
     fill_pipe(entity, self.fluid_name)
@@ -248,7 +248,7 @@ function Network:infer_fluid_from_connectors()
   local inferred_fluid
   local conflict
   foreach_connector(self, function(connector)
-    debug("examining connector "..serpent.line(connector))
+    -- debug("examining connector "..serpent.line(connector))
     local connector_fluidbox = connector.entity.fluidbox[1]
     if connector_fluidbox then
       if inferred_fluid then
@@ -276,7 +276,7 @@ end
 
 function Network:infer_fluid()
   local fluid_name = self:infer_fluid_from_connectors()
-  debug("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
+  -- debug("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
   if fluid_name ~= self.fluid_name then
     self:set_fluid(fluid_name)
   end

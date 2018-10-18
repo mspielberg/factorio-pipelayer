@@ -1,4 +1,4 @@
-local Graph = require "Graph"
+local Graph = require "lualib.Graph"
 
 local function to_set(...)
   local out = {}

@@ -1,5 +1,5 @@
 local Constants = require "Constants"
-local PipeConnections = require "PipeConnections"
+local PipeConnections = require "lualib.PipeConnections"
 
 local M = {}
 

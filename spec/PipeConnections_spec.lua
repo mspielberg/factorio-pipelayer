@@ -1,4 +1,4 @@
-local PipeConnections = require "PipeConnections"
+local PipeConnections = require "lualib.PipeConnections"
 
 local function check_connect(name, position, direction, expected_type)
   local fake_entity = {
