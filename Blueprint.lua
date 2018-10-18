@@ -1,3 +1,4 @@
+local Connector = require "Connector"
 local Constants = require "Constants"
 local Editor = require "Editor"
 require "util"
@@ -52,6 +53,17 @@ function M.bounding_box(bp)
   }
 end
 
+local function is_connector_name(name)
+  return name == "pipefitter-connector" or name == "pipefitter-output-connector"
+end
+
+local function is_connector(entity)
+  if entity.name == "entity-ghost" then
+    return is_connector_name(entity.ghost_name)
+  end
+  return is_connector_name(entity.name)
+end
+
 local function find_in_area(surface, area, args)
   local find_args = util.table.deepcopy(args)
   if area.left_top.x >= area.right_bottom.x or area.left_top.y >= area.right_bottom.y then
@@ -91,6 +103,7 @@ end
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_bpproxy_ghost(ghost, pipe_name)
+  log(serpent.line{ghost=ghost,pipe_name=pipe_name})
   local position = ghost.position
   local create_entity_args = {
     name = "entity-ghost",
@@ -99,11 +112,10 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
     force = ghost.force,
     direction = ghost.direction,
   }
-
-  if editor_surface.can_place_entity(create_entity_args) then
-    local editor_ghost = editor_surface.create_entity(create_entity_args)
+  local editor_ghost = editor_surface.create_entity(create_entity_args)
+  if editor_ghost then
     editor_ghost.last_user = ghost.last_user
-    if pipe_name == "pipefitter-connector" then
+    if is_connector_name(pipe_name) then
       ghost.destroy()
     end
   else
@@ -133,7 +145,7 @@ local function on_player_built_ghost(ghost)
   if ghost.surface == editor_surface then
     local surface_ghost = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
     if surface_ghost and
-      (surface_ghost.ghost_name == "pipefitter-connector" or nonproxy_name(surface_ghost.ghost_name)) then
+      (is_connector(surface_ghost) or nonproxy_name(surface_ghost.ghost_name)) then
       ghost.destroy()
       return
     end
@@ -142,18 +154,26 @@ local function on_player_built_ghost(ghost)
 end
 
 local function create_underground_pipe(name, position, force, direction)
+  local is_output_connector = name == "pipefitter-output-connector"
+
   local underground_pipe = editor_surface.create_entity{
-    name = name,
+    name = is_output_connector and "pipefitter-connector" or name,
     position = position,
     force = force,
     direction = direction,
   }
+
   game.surfaces.nauvis.create_entity{
     name="flying-text",
     position=position,
     text={"pipefitter-message.created-underground", underground_pipe.localised_name},
   }
+
   Editor.connect_underground_pipe(underground_pipe)
+  if is_output_connector then
+    local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", selected.position)
+    Network.for_entity(underground_pipe):toggle_connector_mode(surface_connector)
+  end
 end
 
 local ghost_mined
@@ -192,7 +212,7 @@ end
 
 local function player_mined_connector_ghost(connector_ghost)
   local counterpart = counterpart_surface(connector_ghost.surface).find_entity("entity-ghost", connector_ghost.position)
-  if counterpart and counterpart.ghost_name == "pipefitter-connector" then
+  if is_connector(counterpart) then
     counterpart.destroy()
   end
 end
@@ -210,7 +230,7 @@ function M.on_pre_player_mined_item(event)
         force = entity.force.name,
         position = entity.position,
       }
-    elseif ghost_name == "pipefitter-connector" then
+    elseif is_connector_name(ghost_name) then
       return player_mined_connector_ghost(entity)
     end
   end
@@ -330,6 +350,7 @@ function M.on_canceled_deconstruction(entity, _)
       if counterpart.name == "pipefitter-connector" then
         counterpart.cancel_deconstruction(counterpart.force)
       else
+        -- remove bpproxy on surface
         counterpart.destroy()
       end
     end
@@ -338,6 +359,17 @@ end
 
 ------------------------------------------------------------------------------------------------------------------------
 -- capture underground pipes as bpproxy ghosts
+
+local function replace_with_output_connector(bp_entities, bp_position)
+  for _, bp_entity in ipairs(bp_entities) do
+    if bp_entity.name == "pipefitter-connector" and
+       bp_entity.position.x == bp_position.x and
+       bp_entity.position.y == bp_position.y then
+      bp_entity.name = "pipefitter-output-connector"
+      return
+    end
+  end
+end
 
 function M.on_player_setup_blueprint(event)
   local player_index = event.player_index
@@ -370,10 +402,19 @@ function M.on_player_setup_blueprint(event)
 
   for _, ug_pipe in ipairs(find_in_area(pipefitter_surface, area, {})) do
     if ug_pipe.name ~= "entity-ghost" then
+      local name_in_bp = "pipefitter-bpproxy-"..ug_pipe.name
+      local bp_position = world_to_bp(ug_pipe.position)
+
+      if ug_pipe.name == "pipefitter-connector" and
+         Connector.for_below_unit_number(ug_pipe.unit_number).mode == "output" then
+        name_in_bp = "pipefitter-bpproxy-pipefitter-output-connector"
+        replace_with_output_connector(bp_entities, bp_position)
+      end
+
       bp_entities[#bp_entities + 1] = {
         entity_number = #bp_entities + 1,
-        name = "pipefitter-bpproxy-"..ug_pipe.name,
-        position = world_to_bp(ug_pipe.position),
+        name = name_in_bp,
+        position = bp_position,
         direction = ug_pipe.direction,
       }
     end

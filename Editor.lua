@@ -129,6 +129,13 @@ function M.toggle_connector_mode(player_index)
   end
 end
 
+local function is_connector(entity)
+  if entity.name == "entity-ghost" then
+    return entity.ghost_name == "pipefitter-connector" or entity.ghost_name == "pipefitter-output-connector"
+  end
+  return entity.name == "pipefitter-connector" or entity.name == "pipefitter-output-connector"
+end
+
 local function set_to_list(set)
   local out = {}
   for k in pairs(set) do
@@ -188,15 +195,30 @@ end
 
 local function built_surface_connector(player, entity)
   local position = entity.position
+  local direction = opposite_direction(entity.direction)
+  local force = entity.force
+
+  local is_output = entity.name == "pipefitter-output-connector"
+  if is_output then
+    -- replace with normal connector
+    local replacement = entity.surface.create_entity{
+      name = "pipefitter-connector",
+      direction = entity.direction,
+      force = force,
+      position = position,
+    }
+    entity.destroy()
+    entity = replacement
+  end
+
   if not editor_surface.is_chunk_generated(position) then
     editor_surface.request_to_generate_chunks(position, 1)
     editor_surface.force_generate_chunk_requests()
   end
 
-  local direction = opposite_direction(entity.direction)
   -- check for existing underground connector ghost
   local underground_ghost = editor_surface.find_entity("entity-ghost", position)
-  if underground_ghost and underground_ghost.ghost_name == "pipefitter-connector" then
+  if underground_ghost and is_connector(underground_ghost) then
     direction = underground_ghost.direction
   end
 
@@ -204,19 +226,22 @@ local function built_surface_connector(player, entity)
     name = "pipefitter-connector",
     position = position,
     direction = direction,
-    force = entity.force,
+    force = force,
   }
-  if not editor_surface.can_place_entity(create_args) then
+  local underground_connector = editor_surface.create_entity(create_args)
+  if not underground_connector then
     if player then
       abort_player_build(player, entity)
     else
-      entity.order_deconstruction(entity.force)
+      entity.order_deconstruction(force)
     end
   else
-    local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
     local network = M.connect_underground_pipe(underground_connector)
     network:add_connector_entity(entity, underground_connector.unit_number)
+    if is_output then
+      network:toggle_connector_mode(entity)
+    end
   end
 end
 
@@ -235,7 +260,7 @@ function M.on_player_built_entity(event)
   if not entity.valid or entity.name == "entity-ghost" then return end
   local surface = entity.surface
 
-  if entity.name == "pipefitter-connector" then
+  if is_connector(entity) then
     if surface.name == "nauvis" then
       built_surface_connector(player, entity)
     else
@@ -248,7 +273,7 @@ end
 
 function M.on_robot_built_entity(_, entity, _)
   if not entity.valid then return end
-  if entity.name == "pipefitter-connector" then
+  if is_connector(entity) then
     built_surface_connector(nil, entity)
   end
 end
