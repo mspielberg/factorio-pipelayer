@@ -33,7 +33,7 @@ function M.insert_or_spill(insertable, player, stack)
 end
 
 function M.on_load()
-  remote.add_interface("pipefitter", {register=register})
+  remote.add_interface("pipelayer", {register=register})
 end
 
 return M

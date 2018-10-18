@@ -47,7 +47,7 @@ function M.infer_mode_for_connectors(entity)
   local fluidbox = entity.fluidbox
   for i=1,#fluidbox do
     for _, neighbor in ipairs(entity.neighbours()[i]) do
-      if neighbor.name == "pipefitter-connector" then
+      if neighbor.name == "pipelayer-connector" then
         M.for_entity(neighbor):infer_mode()
       end
     end

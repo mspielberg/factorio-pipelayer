@@ -18,8 +18,8 @@ end
 
 local function make_proxy(proto)
   local proxy_proto = util.table.deepcopy(proto)
-  proxy_proto.name = "pipefitter-bpproxy-"..proto.name
-  proxy_proto.localised_name = {"entity-name.pipefitter-bpproxy", proto.localised_name or {"entity-name."..proto.name}}
+  proxy_proto.name = "pipelayer-bpproxy-"..proto.name
+  proxy_proto.localised_name = {"entity-name.pipelayer-bpproxy", proto.localised_name or {"entity-name."..proto.name}}
   proxy_proto.collision_mask = {}
   proxy_proto.flags = {"player-creation"}
   proxy_proto.placeable_by = proxy_proto.placeable_by or {{item=proto.minable.result, count=1}}
@@ -27,15 +27,15 @@ local function make_proxy(proto)
   return proxy_proto
 end
 
-local connector_proxy = make_proxy(data.raw["storage-tank"]["pipefitter-connector"])
+local connector_proxy = make_proxy(data.raw["storage-tank"]["pipelayer-connector"])
 connector_proxy.placeable_by[1].count = 0
-local output_connector_proxy = make_proxy(data.raw["storage-tank"]["pipefitter-output-connector"])
+local output_connector_proxy = make_proxy(data.raw["storage-tank"]["pipelayer-output-connector"])
 output_connector_proxy.placeable_by[1].count = 0
 data:extend{connector_proxy, output_connector_proxy}
 
 for _, type in ipairs{"pipe", "pipe-to-ground"} do
   for _, proto in pairs(data.raw[type]) do
-    if not proto.name:find("^pipefitter%-bpproxy%-") then
+    if not proto.name:find("^pipelayer%-bpproxy%-") then
       data:extend{make_proxy(proto)}
     end
   end

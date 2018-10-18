@@ -1,7 +1,7 @@
 {
-  "name": "pipefitter",
-  "title": "Pipefitter",
-  "description": "Route your pipes freely underground, and save a ton of UPS on fluid updates.",
+  "name": "pipelayer",
+  "title": "Pipelayer",
+  "description": "Route your pipes freely underground.",
   "factorio_version": "0.16",
   "author": "Therax",
   "version": "0.1.0"

@@ -104,19 +104,19 @@ function M.toggle_editor_status_for_player(player_index)
   elseif player.surface == game.surfaces.nauvis then
     move_player_to_editor(player)
   else
-    player.print({"pipefitter-error.bad-surface"})
+    player.print({"pipelayer-error.bad-surface"})
   end
 end
 
 function M.toggle_connector_mode(player_index)
   local selected = game.players[player_index].selected
-  if not selected or selected.name ~= "pipefitter-connector" then return end
+  if not selected or selected.name ~= "pipelayer-connector" then return end
   local new_mode
   if selected.surface == editor_surface then
-    local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", selected.position)
+    local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", selected.position)
     new_mode = Network.for_entity(selected):toggle_connector_mode(surface_connector)
   elseif selected.surface == game.surfaces.nauvis then
-    local underground_connector = editor_surface.find_entity("pipefitter-connector", selected.position)
+    local underground_connector = editor_surface.find_entity("pipelayer-connector", selected.position)
     new_mode = Network.for_entity(underground_connector):toggle_connector_mode(selected)
   end
 
@@ -124,16 +124,16 @@ function M.toggle_connector_mode(player_index)
     selected.surface.create_entity{
       name = "flying-text",
       position = selected.position,
-      text = {"pipefitter-message.set-connector-mode", {"pipefitter-message.connector-mode-"..new_mode}},
+      text = {"pipelayer-message.set-connector-mode", {"pipelayer-message.connector-mode-"..new_mode}},
     }
   end
 end
 
 local function is_connector(entity)
   if entity.name == "entity-ghost" then
-    return entity.ghost_name == "pipefitter-connector" or entity.ghost_name == "pipefitter-output-connector"
+    return entity.ghost_name == "pipelayer-connector" or entity.ghost_name == "pipelayer-output-connector"
   end
-  return entity.name == "pipefitter-connector" or entity.name == "pipefitter-output-connector"
+  return entity.name == "pipelayer-connector" or entity.name == "pipelayer-output-connector"
 end
 
 local function set_to_list(set)
@@ -184,7 +184,7 @@ local function abort_player_build(player, entity)
   entity.surface.create_entity{
     name = "flying-text",
     position = entity.position,
-    text = {"pipefitter-error.underground-obstructed"},
+    text = {"pipelayer-error.underground-obstructed"},
   }
   entity.destroy()
 end
@@ -198,11 +198,11 @@ local function built_surface_connector(player, entity)
   local direction = opposite_direction(entity.direction)
   local force = entity.force
 
-  local is_output = entity.name == "pipefitter-output-connector"
+  local is_output = entity.name == "pipelayer-output-connector"
   if is_output then
     -- replace with normal connector
     local replacement = entity.surface.create_entity{
-      name = "pipefitter-connector",
+      name = "pipelayer-connector",
       direction = entity.direction,
       force = force,
       position = position,
@@ -223,7 +223,7 @@ local function built_surface_connector(player, entity)
   end
 
   local create_args = {
-    name = "pipefitter-connector",
+    name = "pipelayer-connector",
     position = position,
     direction = direction,
     force = force,
@@ -264,7 +264,7 @@ function M.on_player_built_entity(event)
     if surface.name == "nauvis" then
       built_surface_connector(player, entity)
     else
-      abort_player_build(player, entity, {"pipefitter-error.bad-surface"})
+      abort_player_build(player, entity, {"pipelayer-error.bad-surface"})
     end
   elseif surface == editor_surface then
     player_built_underground_pipe(player_index, entity, event.stack)
@@ -279,7 +279,7 @@ function M.on_robot_built_entity(_, entity, _)
 end
 
 local function mined_surface_connector(entity)
-  local underground_connector = editor_surface.find_entity("pipefitter-connector", entity.position)
+  local underground_connector = editor_surface.find_entity("pipelayer-connector", entity.position)
   M.disconnect_underground_pipe(underground_connector)
   underground_connector.destroy()
 end
@@ -314,14 +314,14 @@ function M.on_player_mined_entity(event)
   local surface = entity.surface
   if surface == editor_surface then
     player_mined_from_editor(event)
-  elseif surface.name == "nauvis" and entity.name == "pipefitter-connector" then
+  elseif surface.name == "nauvis" and entity.name == "pipelayer-connector" then
     mined_surface_connector(entity)
   end
 end
 
 function M.on_robot_mined_entity(_, entity, _)
   local surface = entity.surface
-  if surface.name == "nauvis" and entity.name == "pipefitter-connector" then
+  if surface.name == "nauvis" and entity.name == "pipelayer-connector" then
     mined_surface_connector(entity)
   end
 end
@@ -329,7 +329,7 @@ end
 function M.on_player_rotated_entity(event)
   local entity = event.entity
   if entity.surface ~= editor_surface then return end
-  local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", entity.position)
+  local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", entity.position)
   local old_network = Network.for_entity(entity)
   local new_networks = connected_networks(entity)
   if old_network:is_singleton() and not next(new_networks) then
@@ -347,7 +347,7 @@ end
 
 function M.on_entity_died(event)
   local entity = event.entity
-  if entity.surface == game.surfaces.nauvis and entity.name == "pipefitter-connector" then
+  if entity.surface == game.surfaces.nauvis and entity.name == "pipelayer-connector" then
     mined_surface_connector(entity)
   end
 end

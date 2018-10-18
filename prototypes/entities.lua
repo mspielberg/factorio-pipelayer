@@ -11,11 +11,11 @@ local ug = data.raw["pipe-to-ground"]["pipe-to-ground"]
 
 local connector = {
   type = "storage-tank",
-  name = "pipefitter-connector",
+  name = "pipelayer-connector",
   icon = ug.icon,
   icon_size = ug.icon_size,
   flags = ug.flags,
-  minable = {mining_time = 1.5, result = "pipefitter-connector"},
+  minable = {mining_time = 1.5, result = "pipelayer-connector"},
   max_health = ug.max_health,
   corpse = ug.corpse,
   resistances = ug.resistances,
@@ -97,9 +97,9 @@ local connector = {
 }
 
 local bpproxy_output_connector = util.table.deepcopy(connector)
-bpproxy_output_connector.name = "pipefitter-output-connector"
+bpproxy_output_connector.name = "pipelayer-output-connector"
 bpproxy_output_connector.flags = {"player-creation"}
-bpproxy_output_connector.placeable_by = {{item="pipefitter-connector", count=1}}
+bpproxy_output_connector.placeable_by = {{item="pipelayer-connector", count=1}}
 
 data:extend{
   connector,

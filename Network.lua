@@ -235,7 +235,7 @@ function Network:set_fluid(fluid_name)
   if not fluid_name then
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
-      local counterpart = surface.find_entity("pipefitter-connector", connector.entity.position)
+      local counterpart = surface.find_entity("pipelayer-connector", connector.entity.position)
       local fluidbox = connector.entity.fluidbox[1]
       if fluidbox and fluidbox.amount > 0 then
         fill_pipe(counterpart, fluidbox.name)

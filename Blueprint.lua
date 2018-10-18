@@ -54,7 +54,7 @@ function M.bounding_box(bp)
 end
 
 local function is_connector_name(name)
-  return name == "pipefitter-connector" or name == "pipefitter-output-connector"
+  return name == "pipelayer-connector" or name == "pipelayer-output-connector"
 end
 
 local function is_connector(entity)
@@ -75,7 +75,7 @@ local function find_in_area(surface, area, args)
 end
 
 local function nonproxy_name(name)
-  return name:match("^pipefitter%-bpproxy%-(.*)$")
+  return name:match("^pipelayer%-bpproxy%-(.*)$")
 end
 
 local function counterpart_surface(surface)
@@ -87,10 +87,10 @@ end
 
 local function surface_counterpart(entity)
   local name = entity.name
-  if name == "pipefitter-connector" then
+  if name == "pipelayer-connector" then
     return game.surfaces.nauvis.find_entity(name, entity.position)
   end
-  return game.surfaces.nauvis.find_entity("pipefitter-bpproxy-"..name, entity.position)
+  return game.surfaces.nauvis.find_entity("pipelayer-bpproxy-"..name, entity.position)
 end
 
 local function underground_counterpart(entity)
@@ -126,7 +126,7 @@ end
 local function on_player_built_underground_ghost(ghost)
   game.surfaces.nauvis.create_entity{
     name = "entity-ghost",
-    inner_name = "pipefitter-bpproxy-"..ghost.ghost_name,
+    inner_name = "pipelayer-bpproxy-"..ghost.ghost_name,
     position = ghost.position,
     force = ghost.force,
     direction = ghost.direction
@@ -154,10 +154,10 @@ local function on_player_built_ghost(ghost)
 end
 
 local function create_underground_pipe(name, position, force, direction)
-  local is_output_connector = name == "pipefitter-output-connector"
+  local is_output_connector = name == "pipelayer-output-connector"
 
   local underground_pipe = editor_surface.create_entity{
-    name = is_output_connector and "pipefitter-connector" or name,
+    name = is_output_connector and "pipelayer-connector" or name,
     position = position,
     force = force,
     direction = direction,
@@ -166,12 +166,12 @@ local function create_underground_pipe(name, position, force, direction)
   game.surfaces.nauvis.create_entity{
     name="flying-text",
     position=position,
-    text={"pipefitter-message.created-underground", underground_pipe.localised_name},
+    text={"pipelayer-message.created-underground", underground_pipe.localised_name},
   }
 
   Editor.connect_underground_pipe(underground_pipe)
   if is_output_connector then
-    local surface_connector = game.surfaces.nauvis.find_entity("pipefitter-connector", selected.position)
+    local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", selected.position)
     Network.for_entity(underground_pipe):toggle_connector_mode(surface_connector)
   end
 end
@@ -281,13 +281,13 @@ local function order_underground_deconstruction(player, area)
   local num_to_deconstruct = 0
   local underground_pipes = find_in_area(editor_surface, area, {})
   for _, pipe in ipairs(underground_pipes) do
-    if pipe.name == "pipefitter-connector" then
+    if pipe.name == "pipelayer-connector" then
       pipe.minable = true
       pipe.order_deconstruction(pipe.force)
       pipe.minable = false
     else
       local proxy = nauvis.create_entity{
-        name = "pipefitter-bpproxy-"..pipe.name,
+        name = "pipelayer-bpproxy-"..pipe.name,
         position = pipe.position,
         force = pipe.force,
         direction = pipe.direction,
@@ -303,23 +303,23 @@ end
 
 local function area_contains_connectors(area)
   local nauvis = game.surfaces.nauvis
-  return find_in_area(nauvis, area, {name = "pipefitter-connector", limit = 1})[1] or
-    find_in_area(nauvis, area, {name = "entity-ghost", ghost_name = "pipefitter-connector", limit = 1})[1]
+  return find_in_area(nauvis, area, {name = "pipelayer-connector", limit = 1})[1] or
+    find_in_area(nauvis, area, {name = "entity-ghost", ghost_name = "pipelayer-connector", limit = 1})[1]
 end
 
 local function on_player_deconstructed_surface_area(player, area)
-  local selected_connectors = find_in_area(game.surfaces.nauvis, area, {name = "pipefitter-connector", limit = 1})
+  local selected_connectors = find_in_area(game.surfaces.nauvis, area, {name = "pipelayer-connector", limit = 1})
   if not next(selected_connectors) then return end
   local underground_pipes = order_underground_deconstruction(player, area)
-  if settings.get_player_settings(player)["pipefitter-deconstruction-warning"].value then
-    player.print({"pipefitter-message.marked-for-deconstruction", #underground_pipes})
+  if settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
+    player.print({"pipelayer-message.marked-for-deconstruction", #underground_pipes})
   end
 end
 
 local function on_player_deconstructed_underground_area(player, area)
   local underground_pipes = order_underground_deconstruction(player, area)
   for _, pipe in ipairs(underground_pipes) do
-    if pipe.name == "pipefitter-connector" then
+    if pipe.name == "pipelayer-connector" then
       local counterpart = surface_counterpart(pipe)
       if counterpart then
         counterpart.order_deconstruction(counterpart.force)
@@ -347,7 +347,7 @@ function M.on_canceled_deconstruction(entity, _)
   elseif entity.surface == editor_surface then
     local counterpart = surface_counterpart(entity)
     if counterpart then
-      if counterpart.name == "pipefitter-connector" then
+      if counterpart.name == "pipelayer-connector" then
         counterpart.cancel_deconstruction(counterpart.force)
       else
         -- remove bpproxy on surface
@@ -362,10 +362,10 @@ end
 
 local function replace_with_output_connector(bp_entities, bp_position)
   for _, bp_entity in ipairs(bp_entities) do
-    if bp_entity.name == "pipefitter-connector" and
+    if bp_entity.name == "pipelayer-connector" and
        bp_entity.position.x == bp_position.x and
        bp_entity.position.y == bp_position.y then
-      bp_entity.name = "pipefitter-output-connector"
+      bp_entity.name = "pipelayer-output-connector"
       return
     end
   end
@@ -382,15 +382,15 @@ function M.on_player_setup_blueprint(event)
   local bp_entities = bp.get_blueprint_entities()
   local area = event.area
 
-  local anchor_connector = find_in_area(surface, area, { name = "pipefitter-connector"})[1]
+  local anchor_connector = find_in_area(surface, area, { name = "pipelayer-connector"})[1]
   if not anchor_connector then return end
 
-  local pipefitter_surface = game.surfaces[SURFACE_NAME]
+  local pipelayer_surface = game.surfaces[SURFACE_NAME]
 
   -- find counterpart in blueprint
   local world_to_bp
   for _, bp_entity in ipairs(bp_entities) do
-    if bp_entity.name == "pipefitter-connector" then
+    if bp_entity.name == "pipelayer-connector" then
       local x_offset = bp_entity.position.x - anchor_connector.position.x
       local y_offset = bp_entity.position.y - anchor_connector.position.y
       world_to_bp = function(position)
@@ -400,14 +400,14 @@ function M.on_player_setup_blueprint(event)
     end
   end
 
-  for _, ug_pipe in ipairs(find_in_area(pipefitter_surface, area, {})) do
+  for _, ug_pipe in ipairs(find_in_area(pipelayer_surface, area, {})) do
     if ug_pipe.name ~= "entity-ghost" then
-      local name_in_bp = "pipefitter-bpproxy-"..ug_pipe.name
+      local name_in_bp = "pipelayer-bpproxy-"..ug_pipe.name
       local bp_position = world_to_bp(ug_pipe.position)
 
-      if ug_pipe.name == "pipefitter-connector" and
+      if ug_pipe.name == "pipelayer-connector" and
          Connector.for_below_unit_number(ug_pipe.unit_number).mode == "output" then
-        name_in_bp = "pipefitter-bpproxy-pipefitter-output-connector"
+        name_in_bp = "pipelayer-bpproxy-pipelayer-output-connector"
         replace_with_output_connector(bp_entities, bp_position)
       end
 
