@@ -11,6 +11,10 @@ end
 
 local SURFACE_NAME = Constants.SURFACE_NAME
 
+local active_update_period = 1
+local inactive_update_period
+local no_fluid_update_period
+
 local pipe_capacity_cache = {}
 local function pipe_capacity(name)
   if not pipe_capacity_cache[name] then
@@ -28,6 +32,13 @@ local function fill_pipe(entity, fluid_name)
   end
 end
 
+local function set_update_periods()
+  local base_update_period = settings.global["pipelayer-update-period"].value
+  inactive_update_period = base_update_period
+  no_fluid_update_period = base_update_period * 10
+  log("setting update period to "..base_update_period.." ticks.")
+end
+
 local Network = {}
 
 local all_networks
@@ -40,6 +51,7 @@ function Network.on_init()
 end
 
 function Network.on_load()
+  set_update_periods()
   all_networks = global.all_networks
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
@@ -180,9 +192,7 @@ function Network:remove_underground_pipe(entity)
   end
 
   self.graph:remove(unit_number)
-  if next(self.pipes) then
-    -- self:update()
-  else
+  if not next(self.pipes) then
     self:destroy()
   end
 end
@@ -296,6 +306,7 @@ end
 
 function Network:reschedule(next_tick)
   self.next_tick = next_tick
+  debug{msg="reschedule", next_tick=next_tick, network_id=self.id}
   Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
 end
 
@@ -305,7 +316,7 @@ function Network:update(tick)
   if not self.fluid_name then
     local success = self:infer_fluid()
     if not success then
-      self:reschedule(tick + Constants.NO_FLUID_UPDATE_INTERVAL)
+      self:reschedule(tick + no_fluid_update_period)
       return
     end
   end
@@ -315,7 +326,7 @@ function Network:update(tick)
   -- debug{input=next_input_connector, output=next_output_connector}
   if not next_input_connector or not next_output_connector then
     debug("network "..self.id.." is not ready for transfer")
-    self:reschedule(tick + Constants.INACTIVE_UPDATE_INTERVAL)
+    self:reschedule(tick + inactive_update_period)
     return
   end
 
@@ -334,11 +345,20 @@ function Network:update(tick)
     end
   end
 
-  self:reschedule(tick + Constants.ACTIVE_UPDATE_INTERVAL)
+  self:reschedule(tick + active_update_period)
 end
 
 function Network.update_all(tick)
   Scheduler.on_tick(tick)
+end
+
+function Network.on_runtime_mod_setting_changed(event)
+  local name = event.setting
+  if name == "pipelayer-transfer-threshold" then
+    Connector.on_runtime_mod_setting_changed(event)
+  elseif name == "pipelayer-update-period" then
+    set_update_periods()
+  end
 end
 
 return Network

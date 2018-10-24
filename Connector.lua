@@ -6,7 +6,8 @@ local M = {}
 local Connector = {}
 
 local CAPACITY = Constants.CONNECTOR_CAPACITY
-local MAX_UPDATE_INTERVAL = Constants.MAX_CONNECTOR_UPDATE_INTERVAL
+
+local transfer_threshold = settings.global["pipelayer-transfer-threshold"].value
 
 local connector_for_above = {}
 local connector_for_below = {}
@@ -19,10 +20,6 @@ function M.new(entity, below_unit_number)
     unit_number = entity.unit_number,
     below_unit_number = below_unit_number,
     mode = "input",
-    prev_amount = fluid and fluid.amount or 0,
-    prev_tick = 0,
-    flow_est = 0,
-    next_tick = 0,
   }
   M.restore(self)
   self:infer_mode()
@@ -33,6 +30,12 @@ function M.restore(self)
   connector_for_above[self.unit_number] = self
   connector_for_below[self.below_unit_number] = self
   return setmetatable(self, { __index = Connector })
+end
+
+function M.on_runtime_mod_setting_changed(event)
+  if event.setting == "pipelayer-transfer-threshold" then
+    transfer_threshold = settings.global["pipelayer-transfer-threshold"].value
+  end
 end
 
 function M.for_entity(entity)
@@ -57,13 +60,13 @@ end
 function Connector:ready_as_input()
   self.fluidbox = self.fluidbox or self.entity.fluidbox
   local fluid = self.fluidbox[1]
-  return fluid and fluid.amount > CAPACITY / 2
+  return fluid and fluid.amount >= transfer_threshold
 end
 
 function Connector:ready_as_output()
   self.fluidbox = self.fluidbox or self.entity.fluidbox
   local fluid = self.fluidbox[1]
-  return not fluid or fluid.amount < CAPACITY / 2
+  return not fluid or ((CAPACITY - fluid.amount) >= transfer_threshold)
 end
 
 function Connector:is_conflicting(expected_fluid)

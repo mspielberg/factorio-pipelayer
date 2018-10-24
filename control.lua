@@ -71,6 +71,10 @@ local event_handlers = {
   on_entity_died = function(event)
     Editor.on_entity_died(event)
   end,
+
+  on_runtime_mod_setting_changed = function(event)
+    Network.on_runtime_mod_setting_changed(event)
+  end,
 }
 
 local function on_toggle_editor(event)
