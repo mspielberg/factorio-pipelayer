@@ -35,7 +35,7 @@ end
 local function set_update_periods()
   local base_update_period = settings.global["pipelayer-update-period"].value
   inactive_update_period = base_update_period
-  no_fluid_update_period = base_update_period * 10
+  no_fluid_update_period = base_update_period * 5
   log("setting update period to "..base_update_period.." ticks.")
 end
 
