@@ -214,7 +214,7 @@ end
 
 local function player_mined_connector_ghost(connector_ghost)
   local counterpart = counterpart_surface(connector_ghost.surface).find_entity("entity-ghost", connector_ghost.position)
-  if is_connector(counterpart) then
+  if counterpart and is_connector(counterpart) then
     counterpart.destroy()
   end
 end
