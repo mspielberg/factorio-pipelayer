@@ -2,6 +2,7 @@ local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
 local Constants = require "Constants"
 local Graph = require "lualib.Graph"
+local Scheduler = require "lualib.Scheduler"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
@@ -51,14 +52,13 @@ function Network.on_load()
       end
     end
     ConnectorSet.restore(network.connectors)
+    Scheduler.schedule(network.next_tick or 0, function(tick) network:update(tick) end)
   end
 end
 
 --[[
   {
     fluid_name = "water",
-    fluid_amount = 0,
-    fluid_temperature = 15,
     Graph = Graph(),
     pipes = {
       [unit_number] = pipe_entity,
@@ -73,13 +73,13 @@ function Network.new()
   local self = {
     id = network_id,
     fluid_name = nil,
-    fluid_amount = 0,
-    fluid_temperature = 15,
     graph = Graph.new(),
     pipes = {},
     connectors = ConnectorSet.new(),
+    next_tick = 0,
   }
   setmetatable(self, {__index = Network})
+  Scheduler.schedule(self.next_tick, function(tick) self:update(tick) end)
   all_networks[network_id] = self
   debug("created new network "..network_id)
   return self
@@ -187,15 +187,25 @@ function Network:remove_underground_pipe(entity)
   end
 end
 
+function Network:set_connector_mode(entity, mode)
+  local connector = Connector.for_entity(entity)
+  if mode == "input" then
+    self.connectors:add_input(connector)
+  elseif mode == "output" then
+    self.connectors:add_output(connector)
+  else
+    error("invalid mode: "..mode)
+  end
+  connector.mode = mode
+end
+
 function Network:toggle_connector_mode(entity)
   local connector = Connector.for_entity(entity)
   local current_mode = connector.mode
   if current_mode == "input" then
-    connector.mode = "output"
-    self.connectors:add_output(connector)
+    self:set_connector_mode(entity, "output")
   else
-    connector.mode = "input"
-    self.connectors:add_input(connector)
+    self:set_connector_mode(entity, "input")
   end
   return connector.mode
 end
@@ -225,7 +235,7 @@ function Network:foreach_underground_entity(callback)
 end
 
 function Network:set_fluid(fluid_name)
-  -- debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
+  debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   self:foreach_underground_entity(function(entity)
     fill_pipe(entity, self.fluid_name)
@@ -279,47 +289,52 @@ function Network:infer_fluid()
   -- debug("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
   if fluid_name ~= self.fluid_name then
     self:set_fluid(fluid_name)
+    return true
   end
+  return false
+end
+
+function Network:reschedule(next_tick)
+  self.next_tick = next_tick
+  Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
 end
 
 function Network:update(tick)
+  if not all_networks[self.id] then return end
+
+  debug("updating "..self.id)
   if not self.fluid_name then
-    -- if tick % 60 == 0 then
-      self:infer_fluid()
-    -- end
+    local success = self:infer_fluid()
+    if not success then
+      self:reschedule(tick + Constants.NO_FLUID_UPDATE_INTERVAL)
+      return
+    end
+  end
+
+  debug("searching for next input")
+  local next_input_connector = self.connectors:next_input()
+  debug("searching for next output")
+  local next_output_connector = self.connectors:next_output()
+  debug{input=next_input_connector, output=next_output_connector}
+  if not next_input_connector or not next_output_connector then
+    self:reschedule(tick + Constants.INACTIVE_UPDATE_INTERVAL)
     return
   end
 
-  local next_input_connector = self.connectors:next_input()
-  local next_output_connector = self.connectors:next_output()
-
-  if not next_input_connector or not next_output_connector then return end
-
-  debug{id=self.network_id, tick=tick, from=next_input_connector.entity.position, output=next_output_connector.entity.position}
   if self:can_transfer(next_input_connector, next_output_connector) then
     next_input_connector:transfer_to(self.fluid_name, next_output_connector)
   else
-    debug("cannot transfer")
     if next_input_connector:is_conflicting(self.fluid_name)
     or next_output_connector:is_conflicting(self.fluid_name) then
       self:set_fluid(nil)
     end
   end
+
+  self:reschedule(tick + Constants.ACTIVE_UPDATE_INTERVAL)
 end
 
 function Network.update_all(tick)
-  local network
-  for i=1,1 do
-    global.network_iter, network = next(all_networks, global.network_iter)
-    if not network then
-      global.network_iter, network = next(all_networks, global.network_iter)
-    end
-    if network then
-      network:update(tick)
-    else
-      return
-    end
-  end
+  Scheduler.on_tick(tick)
 end
 
 return Network
