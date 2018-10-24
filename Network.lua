@@ -302,7 +302,6 @@ end
 function Network:update(tick)
   if not all_networks[self.id] then return end
 
-  debug("updating "..self.id)
   if not self.fluid_name then
     local success = self:infer_fluid()
     if not success then
@@ -311,17 +310,22 @@ function Network:update(tick)
     end
   end
 
-  debug("searching for next input")
   local next_input_connector = self.connectors:next_input()
-  debug("searching for next output")
   local next_output_connector = self.connectors:next_output()
-  debug{input=next_input_connector, output=next_output_connector}
+  -- debug{input=next_input_connector, output=next_output_connector}
   if not next_input_connector or not next_output_connector then
+    debug("network "..self.id.." is not ready for transfer")
     self:reschedule(tick + Constants.INACTIVE_UPDATE_INTERVAL)
     return
   end
 
   if self:can_transfer(next_input_connector, next_output_connector) then
+    debug{
+      network=self.id,
+      fluid=self.fluid_name,
+      from=next_input_connector.entity.position,
+      to=next_output_connector.entity.position
+    }
     next_input_connector:transfer_to(self.fluid_name, next_output_connector)
   else
     if next_input_connector:is_conflicting(self.fluid_name)
