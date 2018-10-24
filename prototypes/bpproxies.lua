@@ -35,7 +35,7 @@ data:extend{connector_proxy, output_connector_proxy}
 
 for _, type in ipairs{"pipe", "pipe-to-ground"} do
   for _, proto in pairs(data.raw[type]) do
-    if not proto.name:find("^pipelayer%-bpproxy%-") then
+    if not proto.name:find("^pipelayer%-bpproxy%-") and (proto.placeable_by or proto.minable) then
       data:extend{make_proxy(proto)}
     end
   end
