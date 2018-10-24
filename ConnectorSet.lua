@@ -86,9 +86,12 @@ function ConnectorSet:add(connector)
 end
 
 function ConnectorSet:next_input()
-  local i = self.input_iter
-  local starting_index = self.input_iter
   local l = self.input_connectors
+  local i = self.input_iter
+  if i > #l then
+    i = 1
+  end
+  local starting_index = i
   repeat
     local connector = l[i]
     if connector then
@@ -106,9 +109,12 @@ function ConnectorSet:next_input()
 end
 
 function ConnectorSet:next_output()
-  local i = self.output_iter
-  local starting_index = self.output_iter
   local l = self.output_connectors
+  local i = self.output_iter
+  if i > #l then
+    i = 1
+  end
+  local starting_index = i
   repeat
     local connector = l[i]
     if connector then
