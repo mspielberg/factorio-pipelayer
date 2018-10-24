@@ -103,7 +103,7 @@ end
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_bpproxy_ghost(ghost, pipe_name)
-  log(serpent.line{ghost=ghost,pipe_name=pipe_name})
+  -- log(serpent.line{ghost=ghost,pipe_name=pipe_name})
   local position = ghost.position
   local create_entity_args = {
     name = "entity-ghost",
@@ -111,7 +111,9 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
     position = position,
     force = ghost.force,
     direction = ghost.direction,
+    build_check_type = defines.build_check_type.ghost_place,
   }
+  if editor_surface.can_place_entity(create_entity_args) then
   local editor_ghost = editor_surface.create_entity(create_entity_args)
   if editor_ghost then
     editor_ghost.last_user = ghost.last_user
