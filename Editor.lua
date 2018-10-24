@@ -228,19 +228,19 @@ local function built_surface_connector(player, entity)
     direction = direction,
     force = force,
   }
-  local underground_connector = editor_surface.create_entity(create_args)
-  if not underground_connector then
+  if not editor_surface.can_place_entity(create_args) then
     if player then
       abort_player_build(player, entity)
     else
       entity.order_deconstruction(force)
     end
   else
+    local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
     local network = M.connect_underground_pipe(underground_connector)
     network:add_connector_entity(entity, underground_connector.unit_number)
     if is_output then
-      network:toggle_connector_mode(entity)
+      network:set_connector_mode(entity, "output")
     end
   end
 end
