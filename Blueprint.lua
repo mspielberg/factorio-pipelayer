@@ -3,7 +3,6 @@ local Constants = require "Constants"
 local Editor = require "Editor"
 require "util"
 
-local SURFACE_NAME = Constants.SURFACE_NAME
 local debug = function() end
 if Constants.DEBUG_ENABLED then
   debug = log
@@ -79,7 +78,7 @@ local function nonproxy_name(name)
 end
 
 local function counterpart_surface(surface)
-  if surface.name == SURFACE_NAME then
+  if surface == editor_surface then
     return game.surfaces.nauvis
   end
   return editor_surface
@@ -114,8 +113,7 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
     build_check_type = defines.build_check_type.ghost_place,
   }
   if editor_surface.can_place_entity(create_entity_args) then
-  local editor_ghost = editor_surface.create_entity(create_entity_args)
-  if editor_ghost then
+    local editor_ghost = editor_surface.create_entity(create_entity_args)
     editor_ghost.last_user = ghost.last_user
     if is_connector_name(pipe_name) then
       ghost.destroy()
@@ -362,6 +360,59 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 -- capture underground pipes as bpproxy ghosts
 
+local function find_entity_or_ghost(surface, name, position)
+  local entity = surface.find_entity(name, position)
+  if entity then return entity end
+  local ghost = surface.find_entity("entity-ghost", position)
+  if ghost and ghost.ghost_name == "name" then
+    return ghost
+  end
+  return nil
+end
+
+local function bp_actual_entities(bp_entities, surface, area)
+  local out = {}
+  local bp_anchor = bp_entities[1]
+  local world_anchor = surface.find_entities_filtered{name = bp_anchor.name, area = area, limit = 1}[1]
+  out[1] = world_anchor
+  if not world_anchor then return nil end
+
+  local x_offset = world_anchor.position.x - bp_anchor.position.x
+  local y_offset = world_anchor.position.y - bp_anchor.position.y
+  local bp_to_world = function(p)
+    return { x = p.x + x_offset, y = p.y + y_offset }
+  end
+  local world_to_bp = function(p)
+    return { x = p.x - x_offset, y = p.y - y_offset }
+  end
+
+  for i=2,#bp_entities do
+    local bp_entity = bp_entities[i]
+    local world_entity = find_entity_or_ghost(surface, bp_entity.name, bp_to_world(bp_entity.position))
+    if not world_entity then
+      log("could not find equivalent entity in world for "..serpent.block(bp_entity))
+    end
+    out[i] = world_entity
+  end
+
+  debug("found "..#out.." world entities for "..#bp_entities.." bp entities")
+  return out, world_to_bp
+end
+
+local function is_output_connector(entity)
+  if entity.name ~= "pipelayer-connector" and
+     not (entity.name == "entity-ghost" and entity.ghost_name == "pipelayer-connector") then
+    return false
+  end
+
+  local ug_connector = entity
+  if entity.surface == game.surfaces.nauvis then
+    ug_connector = find_entity_or_ghost(editor_surface, "pipelayer-connector", entity.position)
+  end
+
+  return ug_connector and Connector.for_below_unit_number(ug_connector.unit_number).mode == "output"
+end
+
 local function replace_with_output_connector(bp_entities, bp_position)
   for _, bp_entity in ipairs(bp_entities) do
     if bp_entity.name == "pipelayer-connector" and
@@ -373,42 +424,23 @@ local function replace_with_output_connector(bp_entities, bp_position)
   end
 end
 
-function M.on_player_setup_blueprint(event)
-  local player_index = event.player_index
-  local player = game.players[player_index]
+local function on_player_setup_surface_blueprint(event)
+  local player = game.players[event.player_index]
   local surface = player.surface
-  if surface.name ~= "nauvis" then return end
 
   local bp = player.blueprint_to_setup
   if not bp or not bp.valid_for_read then bp = player.cursor_stack end
   local bp_entities = bp.get_blueprint_entities()
   local area = event.area
 
-  local anchor_connector = find_in_area(surface, area, { name = "pipelayer-connector"})[1]
-  if not anchor_connector then return end
+  local _, world_to_bp = bp_actual_entities(bp_entities, surface, area)
 
-  local pipelayer_surface = game.surfaces[SURFACE_NAME]
-
-  -- find counterpart in blueprint
-  local world_to_bp
-  for _, bp_entity in ipairs(bp_entities) do
-    if bp_entity.name == "pipelayer-connector" then
-      local x_offset = bp_entity.position.x - anchor_connector.position.x
-      local y_offset = bp_entity.position.y - anchor_connector.position.y
-      world_to_bp = function(position)
-        return { x = position.x + x_offset, y = position.y + y_offset }
-      end
-      break
-    end
-  end
-
-  for _, ug_pipe in ipairs(find_in_area(pipelayer_surface, area, {})) do
+  for _, ug_pipe in ipairs(find_in_area(editor_surface, area, {})) do
     if ug_pipe.name ~= "entity-ghost" then
       local name_in_bp = "pipelayer-bpproxy-"..ug_pipe.name
       local bp_position = world_to_bp(ug_pipe.position)
 
-      if ug_pipe.name == "pipelayer-connector" and
-         Connector.for_below_unit_number(ug_pipe.unit_number).mode == "output" then
+      if is_output_connector(ug_pipe) then
         name_in_bp = "pipelayer-bpproxy-pipelayer-output-connector"
         replace_with_output_connector(bp_entities, bp_position)
       end
@@ -422,6 +454,47 @@ function M.on_player_setup_blueprint(event)
     end
   end
   bp.set_blueprint_entities(bp_entities)
+end
+
+local function on_player_setup_underground_blueprint(event)
+  local player = game.players[event.player_index]
+  local surface = player.surface
+
+  local bp = player.blueprint_to_setup
+  if not bp or not bp.valid_for_read then bp = player.cursor_stack end
+  local bp_entities = bp.get_blueprint_entities()
+  local area = event.area
+
+  local actual_entities = bp_actual_entities(bp_entities, surface, area)
+  for i=1,#bp_entities do
+    local bp_entity = bp_entities[i]
+    if bp_entity.name == "pipelayer-connector" then
+      local underground_connector = actual_entities[i]
+      local surface_connector = surface_counterpart(underground_connector)
+      bp_entities[#bp_entities+1] = {
+        entity_number = #bp_entities+1,
+        name = "pipelayer-connector",
+        position = bp_entity.position,
+        direction = surface_connector.direction,
+      }
+      if is_output_connector(underground_connector) then
+        bp_entity.name = "pipelayer-output-connector"
+      end
+    end
+    bp_entity.name = "pipelayer-bpproxy-"..bp_entity.name
+  end
+
+  bp.set_blueprint_entities(bp_entities)
+end
+
+function M.on_player_setup_blueprint(event)
+  local player = game.players[event.player_index]
+  local surface = player.surface
+  if surface == game.surfaces.nauvis then
+    return on_player_setup_surface_blueprint(event)
+  elseif surface == editor_surface then
+    return on_player_setup_underground_blueprint(event)
+  end
 end
 
 return M
