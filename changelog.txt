@@ -1,0 +1,8 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0 - First public release
+Date: 23.10.2018
+  Major Features:
+    - Underground pipe connector
+    - Interactive editor surface
+    - Blueprint/Construction robot support
+    - Settings for tuning and buffer size
