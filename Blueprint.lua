@@ -105,14 +105,15 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
   -- log(serpent.line{ghost=ghost,pipe_name=pipe_name})
   local position = ghost.position
   local create_entity_args = {
-    name = "entity-ghost",
-    inner_name = pipe_name,
+    name = pipe_name,
     position = position,
     force = ghost.force,
     direction = ghost.direction,
     build_check_type = defines.build_check_type.ghost_place,
   }
   if editor_surface.can_place_entity(create_entity_args) then
+    create_entity_args.name = "entity-ghost"
+    create_entity_args.inner_name = pipe_name
     local editor_ghost = editor_surface.create_entity(create_entity_args)
     editor_ghost.last_user = ghost.last_user
     if is_connector_name(pipe_name) then
@@ -121,6 +122,9 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
   else
     ghost.destroy()
   end
+end
+
+local function on_player_built_surface_ghost(ghost)
 end
 
 local function on_player_built_underground_ghost(ghost)
