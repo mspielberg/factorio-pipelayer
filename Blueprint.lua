@@ -280,29 +280,57 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 -- deconstruction
 
-local function order_underground_deconstruction(player, area)
-  local nauvis = game.surfaces.nauvis
-  local num_to_deconstruct = 0
-  local underground_pipes = find_in_area(editor_surface, area, {})
-  for _, pipe in ipairs(underground_pipes) do
-    if pipe.name == "pipelayer-connector" then
-      pipe.minable = true
-      pipe.order_deconstruction(pipe.force)
-      pipe.minable = false
-    else
-      local proxy = nauvis.create_entity{
-        name = "pipelayer-bpproxy-"..pipe.name,
-        position = pipe.position,
-        force = pipe.force,
-        direction = pipe.direction,
-      }
-      proxy.destructible = false
-      proxy.order_deconstruction(proxy.force, player)
-      pipe.order_deconstruction(pipe.force)
-      num_to_deconstruct = num_to_deconstruct + 1
+local function create_entity_filter(tool)
+  local set = {}
+  for _, item in pairs(tool.entity_filters) do
+    set[item] = true
+  end
+  if not next(set) then
+    return function(_) return true end
+  elseif tool.entity_filter_mode == defines.deconstruction_item.entity_filter_mode.blacklist then
+    return function(entity)
+      if entity.name == "entity-ghost" then
+        return not set[entity.ghost_name]
+      else
+        return not set[entity.name]
+      end
+    end
+  else
+    return function(entity)
+      if entity.name == "entity-ghost" then
+        return set[entity.ghost_name]
+      else
+        return set[entity.name]
+      end
     end
   end
-  return underground_pipes
+end
+
+local function order_underground_deconstruction(player, area, filter)
+  local nauvis = game.surfaces.nauvis
+  local num_to_deconstruct = 0
+  local underground_entities = find_in_area(editor_surface, area, {})
+  for _, entity in ipairs(underground_entities) do
+    if filter(entity) then
+      if is_connector(entity) then
+        entity.minable = true
+        entity.order_deconstruction(entity.force)
+        entity.minable = false
+      else
+        local proxy = nauvis.create_entity{
+          name = "pipelayer-bpproxy-"..entity.name,
+          position = entity.position,
+          force = entity.force,
+          direction = entity.direction,
+        }
+        proxy.destructible = false
+        proxy.order_deconstruction(proxy.force, player)
+        entity.order_deconstruction(entity.force)
+        num_to_deconstruct = num_to_deconstruct + 1
+      end
+    end
+  end
+  return underground_entities
 end
 
 local function area_contains_connectors(area)
@@ -311,20 +339,26 @@ local function area_contains_connectors(area)
     find_in_area(nauvis, area, {name = "entity-ghost", ghost_name = "pipelayer-connector", limit = 1})[1]
 end
 
-local function on_player_deconstructed_surface_area(player, area)
-  local selected_connectors = find_in_area(game.surfaces.nauvis, area, {name = "pipelayer-connector", limit = 1})
-  if not next(selected_connectors) then return end
-  local underground_pipes = order_underground_deconstruction(player, area)
+local previous_connector_ghost_deconstruction_tick
+local previous_connector_ghost_deconstruction_player_index
+
+local function on_player_deconstructed_surface_area(player, area, filter)
+  if not area_contains_connectors(area) and
+    (player.index ~= previous_connector_ghost_deconstruction_player_index or
+    game.tick ~= previous_connector_ghost_deconstruction_tick) then
+    return
+  end
+  local underground_entities = order_underground_deconstruction(player, area, filter)
   if settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
-    player.print({"pipelayer-message.marked-for-deconstruction", #underground_pipes})
+    player.print({"pipelayer-message.marked-for-deconstruction", #underground_entities})
   end
 end
 
-local function on_player_deconstructed_underground_area(player, area)
-  local underground_pipes = order_underground_deconstruction(player, area)
-  for _, pipe in ipairs(underground_pipes) do
-    if pipe.name == "pipelayer-connector" then
-      local counterpart = surface_counterpart(pipe)
+local function on_player_deconstructed_underground_area(player, area, filter)
+  local underground_entities = order_underground_deconstruction(player, area, filter)
+  for _, entity in ipairs(underground_entities) do
+    if filter(entity) and is_connector(entity) then
+      local counterpart = surface_counterpart(entity)
       if counterpart then
         counterpart.order_deconstruction(counterpart.force)
       end
@@ -335,10 +369,20 @@ end
 function M.on_player_deconstructed_area(player_index, area, _, alt)
   if alt then return end
   local player = game.players[player_index]
+  local tool = player.cursor_stack
+  if not tool or not tool.valid_for_read or not tool.is_deconstruction_item then return end
+  local filter = create_entity_filter(tool)
   if player.surface == game.surfaces.nauvis then
-    return on_player_deconstructed_surface_area(player, area)
+    return on_player_deconstructed_surface_area(player, area, filter)
   elseif player.surface == editor_surface then
-    return on_player_deconstructed_underground_area(player, area)
+    return on_player_deconstructed_underground_area(player, area, filter)
+  end
+end
+
+function M.on_pre_ghost_deconstructed(player_index, ghost)
+  if is_connector(ghost.ghost_name) then
+    previous_connector_ghost_deconstruction_player_index = player_index
+    previous_connector_ghost_deconstruction_tick = game.tick
   end
 end
 
