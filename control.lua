@@ -72,6 +72,10 @@ local event_handlers = {
     Editor.on_entity_died(event)
   end,
 
+  on_tick = function(event)
+    Network.update_all(event.tick)
+  end,
+
   on_runtime_mod_setting_changed = function(event)
     Network.on_runtime_mod_setting_changed(event)
   end,
@@ -85,13 +89,8 @@ local function on_toggle_connector_mode(event)
   Editor.toggle_connector_mode(event.player_index)
 end
 
-local function on_tick(event)
-  Network.update_all(event.tick)
-end
-
 script.on_init(on_init)
 script.on_load(on_load)
-script.on_nth_tick(1, on_tick)
 script.on_event("pipelayer-toggle-editor-view", on_toggle_editor)
 script.on_event("pipelayer-toggle-connector-mode", on_toggle_connector_mode)
 for event_name, handler in pairs(event_handlers) do
