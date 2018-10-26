@@ -16,7 +16,7 @@ end
 
 local event_handlers = {
   on_built_entity = function(event)
-    if event.mod_name then
+    if event.mod_name and event.mod_name ~= "upgrade-planner" then
       Editor.on_robot_built_entity(event)
     else
       Blueprint.on_player_built_entity(event)
@@ -36,6 +36,10 @@ local event_handlers = {
     Blueprint.on_pre_player_mined_item(event)
   end,
 
+  on_player_mined_item = function(event)
+    Editor.on_player_mined_item(event)
+  end,
+
   on_player_mined_entity = function(event)
     Blueprint.on_player_mined_entity(event.player_index, event.entity, event.buffer)
     Editor.on_player_mined_entity(event)
@@ -53,7 +57,8 @@ local event_handlers = {
     Blueprint.on_player_setup_blueprint(event)
   end,
 
-  on_put_item = function(event)
+  on_pre_ghost_deconstructed = function(event)
+    Blueprint.on_pre_ghost_deconstructed(event.player_index, event.ghost)
   end,
 
   on_player_deconstructed_area = function(event)
