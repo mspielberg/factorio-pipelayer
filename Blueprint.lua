@@ -340,6 +340,7 @@ local function order_underground_deconstruction(player, area, filter)
   local nauvis = game.surfaces.nauvis
   local num_to_deconstruct = 0
   local underground_entities = find_in_area(editor_surface, area, {})
+  local to_deconstruct = {}
   for _, entity in ipairs(underground_entities) do
     if filter(entity) then
       if is_connector(entity) then
@@ -356,11 +357,11 @@ local function order_underground_deconstruction(player, area, filter)
         proxy.destructible = false
         proxy.order_deconstruction(proxy.force, player)
         entity.order_deconstruction(entity.force)
-        num_to_deconstruct = num_to_deconstruct + 1
+        to_deconstruct[#to_deconstruct+1] = entity
       end
     end
   end
-  return underground_entities
+  return to_deconstruct
 end
 
 local function area_contains_connectors(area)
@@ -387,7 +388,7 @@ end
 local function on_player_deconstructed_underground_area(player, area, filter)
   local underground_entities = order_underground_deconstruction(player, area, filter)
   for _, entity in ipairs(underground_entities) do
-    if filter(entity) and is_connector(entity) then
+    if is_connector(entity) then
       local counterpart = surface_counterpart(entity)
       if counterpart then
         counterpart.order_deconstruction(counterpart.force)
