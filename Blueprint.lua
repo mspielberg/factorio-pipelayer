@@ -73,6 +73,16 @@ local function find_in_area(surface, area, args)
   return surface.find_entities_filtered(find_args)
 end
 
+local function abort_player_build(player, entity, message)
+  player.insert(stack_from_items_to_place(entity))
+  entity.surface.create_entity{
+    name = "flying-text",
+    position = entity.position,
+    text = message,
+  }
+  entity.destroy()
+end
+
 local function nonproxy_name(name)
   return name:match("^pipelayer%-bpproxy%-(.*)$")
 end
@@ -93,19 +103,19 @@ local function surface_counterpart(entity)
 end
 
 local function underground_counterpart(entity)
-  local pipe_name = nonproxy_name(entity.name)
-  if pipe_name then
-    return editor_surface.find_entity(pipe_name, entity.position)
+  local name = nonproxy_name(entity.name)
+  if name then
+    return editor_surface.find_entity(name, entity.position)
   end
   return editor_surface.find_entity(entity.name, entity.position)
 end
 
 -- converts overworld bpproxy ghost to regular ghost underground
-local function on_player_built_bpproxy_ghost(ghost, pipe_name)
-  -- log(serpent.line{ghost=ghost,pipe_name=pipe_name})
+local function on_player_built_bpproxy_ghost(ghost, name)
+  -- log(serpent.line{ghost=ghost,name=name})
   local position = ghost.position
   local create_entity_args = {
-    name = pipe_name,
+    name = name,
     position = position,
     force = ghost.force,
     direction = ghost.direction,
@@ -113,18 +123,15 @@ local function on_player_built_bpproxy_ghost(ghost, pipe_name)
   }
   if editor_surface.can_place_entity(create_entity_args) then
     create_entity_args.name = "entity-ghost"
-    create_entity_args.inner_name = pipe_name
+    create_entity_args.inner_name = name
     local editor_ghost = editor_surface.create_entity(create_entity_args)
     editor_ghost.last_user = ghost.last_user
-    if is_connector_name(pipe_name) then
+    if is_connector_name(name) then
       ghost.destroy()
     end
   else
     ghost.destroy()
   end
-end
-
-local function on_player_built_surface_ghost(ghost)
 end
 
 local function on_player_built_underground_ghost(ghost)
@@ -138,13 +145,13 @@ local function on_player_built_underground_ghost(ghost)
 end
 
 local function on_player_built_ghost(ghost)
-  local pipe_name = nonproxy_name(ghost.ghost_name)
-  if pipe_name then
+  local name = nonproxy_name(ghost.ghost_name)
+  if name then
     if editor_surface.find_entity("entity-ghost", ghost.position) then
       ghost.destroy()
       return
     end
-    return on_player_built_bpproxy_ghost(ghost, pipe_name)
+    return on_player_built_bpproxy_ghost(ghost, name)
   end
   if ghost.surface == editor_surface then
     local surface_ghost = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
@@ -157,10 +164,10 @@ local function on_player_built_ghost(ghost)
   end
 end
 
-local function create_underground_pipe(name, position, force, direction)
+local function create_underground_entity(name, position, force, direction)
   local is_output_connector = name == "pipelayer-output-connector"
 
-  local underground_pipe = editor_surface.create_entity{
+  local underground_entity = editor_surface.create_entity{
     name = is_output_connector and "pipelayer-connector" or name,
     position = position,
     force = force,
@@ -170,47 +177,70 @@ local function create_underground_pipe(name, position, force, direction)
   game.surfaces.nauvis.create_entity{
     name="flying-text",
     position=position,
-    text={"pipelayer-message.created-underground", underground_pipe.localised_name},
+    text={"pipelayer-message.created-underground", underground_entity.localised_name},
   }
 
-  Editor.connect_underground_pipe(underground_pipe)
+  Editor.connect_underground_pipe(underground_entity)
   if is_output_connector then
     local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", selected.position)
-    Network.for_entity(underground_pipe):toggle_connector_mode(surface_connector)
+    Network.for_entity(underground_entity):toggle_connector_mode(surface_connector)
   end
+
+  return underground_entity
 end
 
 local ghost_mined
-function M.on_player_built_entity(event)
-  local entity = event.created_entity
-  if entity.name == "entity-ghost" then
-    return on_player_built_ghost(entity)
-  end
-
-  if entity.surface ~= game.surfaces.nauvis then return end
+local function on_player_built_surface_entity(player, entity)
   if not ghost_mined then return end
-
   local name = entity.name
   local direction = entity.direction
   local position = entity.position
   local force = entity.force
-  if ghost_mined.tick == event.tick and
+  if ghost_mined.tick == game.tick and
     ghost_mined.name == name and
     ghost_mined.position.x == position.x and
     ghost_mined.position.y == position.y and
     ghost_mined.direction == direction and
     ghost_mined.force == force.name or force.get_friend(ghost_mined.force) then
-      create_underground_pipe(name, position, force, entity.direction)
-      entity.destroy()
+      local underground_entity = create_underground_entity(name, position, force, direction)
+      if underground_entity then
+        entity.destroy()
+      else
+        abort_player_build(player, entity, {"pipelayer-error.underground-obstructed"})
+      end
+  end
+end
+
+local function on_player_built_underground_entity(_, entity)
+  local colliding_ghosts = find_in_area(game.surfaces.nauvis, entity.bounding_box, {name = "entity-ghost"})
+  for _, ghost in ipairs(colliding_ghosts) do
+    if nonproxy_name(ghost.ghost_name) then
+      -- bpproxy ghost on surface collides with new underground entity
+      ghost.destroy()
+    end
+  end
+end
+
+function M.on_player_built_entity(event)
+  local player = game.players[event.player_index]
+  local entity = event.created_entity
+  if entity.name == "entity-ghost" then
+    return on_player_built_ghost(entity)
+  end
+
+  if entity.surface == game.surfaces.nauvis then
+    return on_player_built_surface_entity(player, entity)
+  elseif entity.surface == editor_surface then
+    return on_player_built_underground_entity(player, entity)
   end
 end
 
 function M.on_robot_built_entity(_, entity, _)
   local surface = entity.surface
   if surface ~= game.surfaces.nauvis then return end
-  local pipe_name = nonproxy_name(entity.name)
-  if not pipe_name then return end
-  create_underground_pipe(pipe_name, entity.position, entity.force, entity.direction)
+  local name = nonproxy_name(entity.name)
+  if not name then return end
+  create_underground_entity(name, entity.position, entity.force, entity.direction)
   entity.destroy()
 end
 
@@ -225,11 +255,11 @@ function M.on_pre_player_mined_item(event)
   local entity = event.entity
   if entity.name == "entity-ghost" then
     local ghost_name = entity.ghost_name
-    local pipe_name = nonproxy_name(ghost_name)
-    if pipe_name then
+    local name = nonproxy_name(ghost_name)
+    if name then
       ghost_mined = {
         tick = event.tick,
-        name = pipe_name,
+        name = name,
         direction = entity.direction,
         force = entity.force.name,
         position = entity.position,
@@ -241,8 +271,8 @@ function M.on_pre_player_mined_item(event)
 end
 
 local function on_player_mined_surface_entity(entity)
-  local pipe_name = nonproxy_name(entity.name)
-  if not pipe_name then return end
+  local name = nonproxy_name(entity.name)
+  if not name then return end
   local counterpart = underground_counterpart(entity)
   if counterpart then
     Editor.disconnect_underground_pipe(counterpart)
@@ -268,8 +298,8 @@ end
 
 function M.on_robot_mined_entity(_, entity, _)
   if not entity.valid or entity.surface ~= game.surfaces.nauvis then return end
-  local pipe_name = nonproxy_name(entity.name)
-  if not pipe_name then return end
+  local name = nonproxy_name(entity.name)
+  if not name then return end
   local counterpart = underground_counterpart(entity)
   if counterpart then
     Editor.disconnect_underground_pipe(counterpart)
