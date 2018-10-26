@@ -356,6 +356,7 @@ local function order_underground_deconstruction(player, area, filter)
         entity.minable = true
         entity.order_deconstruction(entity.force)
         entity.minable = false
+        to_deconstruct[#to_deconstruct+1] = entity
       elseif entity.type == "pipe" or entity.type == "pipe-to-ground" then
         local proxy = nauvis.create_entity{
           name = "pipelayer-bpproxy-"..entity.name,
@@ -384,12 +385,8 @@ local previous_connector_ghost_deconstruction_player_index
 
 local function on_player_deconstructed_surface_area(player, area, filter)
   if not area_contains_connectors(area) and
-    (player.index ~= previous_connector_ghost_deconstruction_player_index or
-    game.tick ~= previous_connector_ghost_deconstruction_tick) then
-      game.print(serpent.line{
-        prev_player=previous_connector_ghost_deconstruction_player_index,
-        prev_tick=previous_connector_ghost_deconstruction_tick,
-      })
+     (player.index ~= previous_connector_ghost_deconstruction_player_index or
+     game.tick ~= previous_connector_ghost_deconstruction_tick) then
     return
   end
   local underground_entities = order_underground_deconstruction(player, area, filter)
@@ -400,7 +397,7 @@ local function on_player_deconstructed_surface_area(player, area, filter)
 end
 
 local function on_player_deconstructed_underground_area(player, area, filter)
-  local underground_entities = order_underground_deconstructio(player, area, filter)
+  local underground_entities = order_underground_deconstruction(player, area, filter)
   for _, entity in ipairs(underground_entities) do
     if is_connector(entity) then
       local counterpart = surface_counterpart(entity)
