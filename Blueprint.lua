@@ -338,16 +338,17 @@ end
 
 local function order_underground_deconstruction(player, area, filter)
   local nauvis = game.surfaces.nauvis
-  local num_to_deconstruct = 0
   local underground_entities = find_in_area(editor_surface, area, {})
   local to_deconstruct = {}
   for _, entity in ipairs(underground_entities) do
     if filter(entity) then
-      if is_connector(entity) then
+      if entity.name == "entity-ghost" then
+        entity.destroy()
+      elseif is_connector(entity) then
         entity.minable = true
         entity.order_deconstruction(entity.force)
         entity.minable = false
-      else
+      elseif entity.type == "pipe" or entity.type == "pipe-to-ground" then
         local proxy = nauvis.create_entity{
           name = "pipelayer-bpproxy-"..entity.name,
           position = entity.position,
@@ -377,16 +378,21 @@ local function on_player_deconstructed_surface_area(player, area, filter)
   if not area_contains_connectors(area) and
     (player.index ~= previous_connector_ghost_deconstruction_player_index or
     game.tick ~= previous_connector_ghost_deconstruction_tick) then
+      game.print(serpent.line{
+        prev_player=previous_connector_ghost_deconstruction_player_index,
+        prev_tick=previous_connector_ghost_deconstruction_tick,
+      })
     return
   end
   local underground_entities = order_underground_deconstruction(player, area, filter)
-  if settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
+  if next(underground_entities) and
+     settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
     player.print({"pipelayer-message.marked-for-deconstruction", #underground_entities})
   end
 end
 
 local function on_player_deconstructed_underground_area(player, area, filter)
-  local underground_entities = order_underground_deconstruction(player, area, filter)
+  local underground_entities = order_underground_deconstructio(player, area, filter)
   for _, entity in ipairs(underground_entities) do
     if is_connector(entity) then
       local counterpart = surface_counterpart(entity)
@@ -411,7 +417,7 @@ function M.on_player_deconstructed_area(player_index, area, _, alt)
 end
 
 function M.on_pre_ghost_deconstructed(player_index, ghost)
-  if is_connector(ghost.ghost_name) then
+  if is_connector(ghost) then
     previous_connector_ghost_deconstruction_player_index = player_index
     previous_connector_ghost_deconstruction_tick = game.tick
   end
