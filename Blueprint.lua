@@ -336,6 +336,13 @@ local function create_entity_filter(tool)
   end
 end
 
+local function destroy_bpproxy_ghost(position)
+  local ghost = game.surfaces.nauvis.find_entity("entity-ghost", position)
+  if ghost and ghost.ghost_name:find("^pipelayer%-bpproxy%-") then
+    ghost.destroy()
+  end
+end
+
 local function order_underground_deconstruction(player, area, filter)
   local nauvis = game.surfaces.nauvis
   local underground_entities = find_in_area(editor_surface, area, {})
@@ -343,6 +350,7 @@ local function order_underground_deconstruction(player, area, filter)
   for _, entity in ipairs(underground_entities) do
     if filter(entity) then
       if entity.name == "entity-ghost" then
+        destroy_bpproxy_ghost(entity.position)
         entity.destroy()
       elseif is_connector(entity) then
         entity.minable = true
