@@ -23,32 +23,38 @@ local function editor_autoplace_control()
   return next(game.autoplace_control_prototypes)
 end
 
-function M.on_init()
+local function create_editor_surface()
   local autoplace_control = editor_autoplace_control()
-    local surface = game.create_surface(
-      SURFACE_NAME,
-      {
-        starting_area = "none",
-        water = "none",
-        cliff_settings = { cliff_elevation_0 = 1024 },
-        default_enable_all_autoplace_controls = false,
-        autoplace_controls = {
-          [autoplace_control] = {
-            frequency = "very-low",
-            size = "very-high",
-          },
+  local surface = game.create_surface(
+    SURFACE_NAME,
+    {
+      starting_area = "none",
+      water = "none",
+      cliff_settings = { cliff_elevation_0 = 1024 },
+      default_enable_all_autoplace_controls = false,
+      autoplace_controls = {
+        [autoplace_control] = {
+          frequency = "very-low",
+          size = "very-high",
         },
-        autoplace_settings = {
-          decorative = { treat_missing_as_default = false },
-          entity = { treat_missing_as_default = false },
-        },
-      }
-    )
-    surface.daytime = 0.35
-    surface.freeze_daytime = true
-    global.editor_surface = surface
-    global.player_state = {}
-    M.on_load()
+      },
+      autoplace_settings = {
+        decorative = { treat_missing_as_default = false },
+        entity = { treat_missing_as_default = false },
+      },
+    }
+  )
+  surface.daytime = 0.35
+  surface.freeze_daytime = true
+  global.editor_surface = surface
+end
+
+function M.on_init()
+  if not game.surfaces[SURFACE_NAME] then
+    create_editor_surface()
+  end
+  global.player_state = {}
+  M.on_load()
 end
 
 function M.on_load()
