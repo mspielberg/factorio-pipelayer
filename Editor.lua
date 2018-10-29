@@ -50,7 +50,9 @@ local function create_editor_surface()
 end
 
 function M.on_init()
-  if not game.surfaces[SURFACE_NAME] then
+  if game.surfaces[SURFACE_NAME] then
+    game.delete_surface(SURFACE_NAME)
+  else
     create_editor_surface()
   end
   global.player_state = {}
@@ -60,6 +62,13 @@ end
 function M.on_load()
   editor_surface = global.editor_surface
   player_state = global.player_state
+end
+
+function M.on_surface_deleted(event)
+  if not game.surfaces[SURFACE_NAME] then
+    create_editor_surface()
+    editor_surface = global.editor_surface
+  end
 end
 
 local function get_player_pipe_stacks(player)
