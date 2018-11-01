@@ -71,6 +71,21 @@ function M.on_surface_deleted(event)
   end
 end
 
+local valid_editor_types = {
+  ["pipe"] = true,
+  ["pipe-to-ground"] = true,
+}
+
+local function is_stack_valid_for_editor(stack)
+  if stack.valid_for_read then
+    local place_result = stack.prototype.place_result
+    if place_result and valid_editor_types[place_result.type] then
+      return true
+    end
+  end
+  return false
+end
+
 local function get_player_pipe_stacks(player)
   local stacks = {}
   for _, inventory_index in ipairs{defines.inventory.player_quickbar, defines.inventory.player_main} do
@@ -78,11 +93,8 @@ local function get_player_pipe_stacks(player)
     if inventory then
       for i=1,#inventory do
         local stack = inventory[i]
-        if stack.valid_for_read then
-          local place_result = stack.prototype.place_result
-          if place_result and (place_result.type == "pipe" or place_result.type == "pipe-to-ground") then
-            stacks[#stacks+1] = {name = stack.name, count = stack.count}
-          end
+        if is_stack_valid_for_editor(stack) then
+          stacks[#stacks+1] = {name = stack.name, count = stack.count}
         end
       end
     end
@@ -341,7 +353,7 @@ local function return_buffer_to_character(player_index, character, buffer)
         -- match editor player inventory to character inventory
         stack.count = inserted
       else
-        -- belt contents; don't allow placement in editor
+        -- don't allow placement in editor
         stack.clear()
       end
     end
