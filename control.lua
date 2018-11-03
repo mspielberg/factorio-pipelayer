@@ -83,7 +83,9 @@ local event_handlers = {
   end,
 
   on_tick = function(event)
-    Network.update_all(event.tick)
+    local tick = event.tick
+    Editor.on_tick(tick)
+    Network.update_all(tick)
   end,
 
   on_runtime_mod_setting_changed = function(event)
