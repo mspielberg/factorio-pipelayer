@@ -1,163 +1,54 @@
-local Constants = require "Constants"
+local BaseEditor = require "lualib.BaseEditor.BaseEditor"
 local Network = require "Network"
 
 local M = {}
-local SURFACE_NAME = Constants.SURFACE_NAME
-local UNDERGROUND_TILE_NAME = Constants.UNDERGROUND_TILE_NAME
 
-local editor_surface
-local player_state
+local Editor = {}
+local super = BaseEditor.class
+setmetatable(Editor, { __index = super })
+
+
+function M.new()
+  local self = BaseEditor.new("pipelayer")
+  self.valid_editor_types = { "pipe", "pipe-to-ground" }
+  return M.restore(self)
+end
+
+function M.restore(self)
+  return setmetatable(self, { __index = Editor })
+end
+
+function M.instance()
+  if global.editor then
+    return M.restore(global.editor)
+  else
+    return M.new()
+  end
+end
 
 local debug = function() end
-if Constants.DEBUG_ENABLED then
-  debug = log
+-- debug = log
+
+local function nonproxy_name(name)
+  return name:match("^pipelayer%-bpproxy%-(.*)$")
 end
 
-local function editor_autoplace_control()
-  for control in pairs(game.autoplace_control_prototypes) do
-    if control:find("dirt") then
-      return control
-    end
-  end
-  -- pick one at random
-  return next(game.autoplace_control_prototypes)
+local function underground_counterpart_for_bpproxy(self, bpproxy)
+  local name = nonproxy_name(bpproxy.name)
+  return self:editor_surface_for_aboveground_surface(bpproxy.surface).find_entity(name, bpproxy.position)
 end
 
-local function create_editor_surface()
-  local autoplace_control = editor_autoplace_control()
-  local surface = game.create_surface(
-    SURFACE_NAME,
-    {
-      starting_area = "none",
-      water = "none",
-      cliff_settings = { cliff_elevation_0 = 1024 },
-      default_enable_all_autoplace_controls = false,
-      autoplace_controls = {
-        [autoplace_control] = {
-          frequency = "very-low",
-          size = "very-high",
-        },
-      },
-      autoplace_settings = {
-        decorative = { treat_missing_as_default = false },
-        entity = { treat_missing_as_default = false },
-      },
-    }
-  )
-  surface.daytime = 0.35
-  surface.freeze_daytime = true
-  global.editor_surface = surface
-end
-
-function M.on_init()
-  if game.surfaces[SURFACE_NAME] then
-    game.delete_surface(SURFACE_NAME)
-  else
-    create_editor_surface()
-  end
-  global.player_state = {}
-  M.on_load()
-end
-
-function M.on_load()
-  editor_surface = global.editor_surface
-  player_state = global.player_state
-end
-
-function M.on_surface_deleted(event)
-  if not game.surfaces[SURFACE_NAME] then
-    create_editor_surface()
-    editor_surface = global.editor_surface
-  end
-end
-
-local valid_editor_types = {
-  ["pipe"] = true,
-  ["pipe-to-ground"] = true,
-}
-
-local function is_stack_valid_for_editor(stack)
-  local item_prototype
-  if stack.valid and stack.valid_for_read then
-    item_prototype = stack.prototype
-  elseif not stack.valid then
-    item_prototype = game.item_prototypes[stack.name]
-  else
-    return false
-  end
-  local place_result = item_prototype.place_result
-  if place_result and valid_editor_types[place_result.type] then
-    return true
-  end
-  return false
-end
-
-local function sync_player_inventory(character, player)
-  for name in pairs(valid_editor_types) do
-    local character_count = character.get_item_count(name)
-    local player_count = player.get_item_count(name)
-    if character_count > player_count then
-      player.insert{name = name, count = character_count - player_count}
-    elseif character_count < player_count then
-      player.remove_item{name = name, count = player_count - character_count}
-    end
-  end
-end
-
-local function sync_player_inventories()
-  for player_index, state in pairs(player_state) do
-    local character = state.character
-    if character then
-      local player = game.players[player_index]
-      if player.connected then
-        sync_player_inventory(character, player)
-      end
-    end
-  end
-end
-
-local function move_player_to_editor(player)
-  local success = player.clean_cursor()
-  if not success then return end
-  local player_index = player.index
-  player_state[player_index] = {
-    position = player.position,
-    surface = player.surface,
-    character = player.character,
-  }
-  player.character = nil
-  player.teleport(player.position, editor_surface)
-end
-
-local function return_player_from_editor(player)
-  local player_index = player.index
-  local state = player_state[player_index]
-  player.teleport(state.position, state.surface)
-  if state.character then
-    player.character = state.character
-  end
-  player_state[player_index] = nil
-end
-
-function M.toggle_editor_status_for_player(player_index)
-  local player = game.players[player_index]
-  if player.surface == editor_surface then
-    return_player_from_editor(player)
-  elseif player.surface == game.surfaces.nauvis then
-    move_player_to_editor(player)
-  else
-    player.print({"pipelayer-error.bad-surface"})
-  end
-end
-
-function M.toggle_connector_mode(player_index)
+function Editor:toggle_connector_mode(player_index)
   local selected = game.players[player_index].selected
   if not selected or selected.name ~= "pipelayer-connector" then return end
+  local surface = selected.surface
   local new_mode
-  if selected.surface == editor_surface then
-    local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", selected.position)
+  if self:is_editor_surface(surface) then
+    local aboveground_surface = self:aboveground_surface_for_editor_surface(surface)
+    local surface_connector = aboveground_surface.find_entity("pipelayer-connector", selected.position)
     new_mode = Network.for_entity(selected):toggle_connector_mode(surface_connector)
-  elseif selected.surface == game.surfaces.nauvis then
+  elseif self:is_valid_aboveground_surface(surface) then
+    local editor_surface = self:editor_surface_for_aboveground_surface(surface)
     local underground_connector = editor_surface.find_entity("pipelayer-connector", selected.position)
     new_mode = Network.for_entity(underground_connector):toggle_connector_mode(selected)
   end
@@ -195,7 +86,7 @@ local function connected_networks(entity)
   return set_to_list(out)
 end
 
- function M.connect_underground_pipe(entity)
+ function connect_underground_pipe(entity)
   entity.active = false
   local networks = connected_networks(entity)
   if not next(networks) then
@@ -214,28 +105,19 @@ end
   return main_network
 end
 
-function M.disconnect_underground_pipe(entity)
+function disconnect_underground_pipe(entity)
   local network = Network.for_entity(entity)
   if network then
     network:remove_underground_pipe(entity)
   end
 end
 
-local function abort_player_build(player, entity)
-  player.insert({name = entity.name, count = 1})
-  entity.surface.create_entity{
-    name = "flying-text",
-    position = entity.position,
-    text = {"pipelayer-error.underground-obstructed"},
-  }
-  entity.destroy()
-end
-
 local function opposite_direction(direction)
   return (direction + 4) % 8
 end
 
-local function built_surface_connector(player, entity)
+local function on_built_aboveground_connector(self, creator, entity, stack)
+  local surface = entity.surface
   local position = entity.position
   local direction = opposite_direction(entity.direction)
   local force = entity.force
@@ -243,7 +125,7 @@ local function built_surface_connector(player, entity)
   local is_output = entity.name == "pipelayer-output-connector"
   if is_output then
     -- replace with normal connector
-    local replacement = entity.surface.create_entity{
+    local replacement = surface.create_entity{
       name = "pipelayer-connector",
       direction = entity.direction,
       force = force,
@@ -253,10 +135,7 @@ local function built_surface_connector(player, entity)
     entity = replacement
   end
 
-  if not editor_surface.is_chunk_generated(position) then
-    editor_surface.request_to_generate_chunks(position, 1)
-    editor_surface.force_generate_chunk_requests()
-  end
+  local editor_surface = self:editor_surface_for_aboveground_surface(surface)
 
   -- check for existing underground connector ghost
   local underground_ghost = editor_surface.find_entity("entity-ghost", position)
@@ -271,15 +150,11 @@ local function built_surface_connector(player, entity)
     force = force,
   }
   if not editor_surface.can_place_entity(create_args) then
-    if player then
-      abort_player_build(player, entity)
-    else
-      entity.order_deconstruction(force)
-    end
+    super.abort_build(creator, entity, stack, {"pipelayer-error.underground-obstructed"})
   else
     local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
-    local network = M.connect_underground_pipe(underground_connector)
+    local network = connect_underground_pipe(underground_connector)
     network:add_connector_entity(entity, underground_connector.unit_number)
     if is_output then
       network:set_connector_mode(entity, "output")
@@ -287,23 +162,26 @@ local function built_surface_connector(player, entity)
   end
 end
 
-local function player_built_underground_pipe(player_index, entity, stack)
-    local character = player_state[player_index].character
-    if character then
-      character.remove_item(stack)
-    end
-    M.connect_underground_pipe(entity)
+local function on_built_ghost(ghost)
+  if ghost.ghost_name == "pipelayer-bpproxy-pipelayer-connector" then
+    -- we already have the pipelayer-connector ghost on the editor surface
+    ghost.destroy()
+  end
 end
 
 local function item_for_entity(entity)
   return next(entity.prototype.items_to_place_this)
 end
 
-function M.on_player_built_entity(event)
+function Editor:on_built_entity(event)
+  super.on_built_entity(self, event)
   local player_index = event.player_index
   local player = game.players[player_index]
   local entity = event.created_entity
-  if not entity.valid or entity.name == "entity-ghost" then return end
+  if not entity.valid then return end
+  if entity.name == "entity-ghost" then
+    return on_built_ghost(entity)
+  end
   local stack = event.stack
   local surface = entity.surface
 
@@ -313,104 +191,82 @@ function M.on_player_built_entity(event)
   end
 
   if is_connector(entity) then
-    if surface.name == "nauvis" then
-      built_surface_connector(player, entity)
+    if self:is_valid_aboveground_surface(surface) then
+      on_built_aboveground_connector(self, player, entity, stack)
     else
-      abort_player_build(player, entity, {"pipelayer-error.bad-surface"})
+      super.abort_build(player, entity, stack, {"pipelayer-error.bad-surface"})
     end
-  elseif surface == editor_surface then
-    player_built_underground_pipe(player_index, entity, stack)
+  elseif self:is_editor_surface(surface) then
+    connect_underground_pipe(entity)
   end
 end
 
-function M.on_robot_built_entity(_, entity, _)
-  if not entity.valid then return end
-  if is_connector(entity) then
-    built_surface_connector(nil, entity)
+function Editor:on_robot_built_entity(event)
+  local entity = event.created_entity
+  local surface = entity.surface
+
+  -- superclass will destroy bpproxy and create underground entity, so store info
+  -- we need to find that underground entity
+  local name = nonproxy_name(entity.name)
+  local position = entity.position
+
+  super.on_robot_built_entity(self, event)
+
+  if name then
+    local editor_surface = self:editor_surface_for_aboveground_surface(surface)
+    local underground_entity = editor_surface.find_entity(name, position)
+    connect_underground_pipe(underground_entity)
+  end
+
+  if entity.valid and is_connector(entity) then
+    on_built_aboveground_connector(self, event.robot, entity, event.stack)
   end
 end
 
-local function mined_surface_connector(entity)
+local function on_mined_bpproxy(self, bpproxy)
+  local counterpart = underground_counterpart_for_bpproxy(self, bpproxy)
+  if counterpart then
+    disconnect_underground_pipe(counterpart)
+  end
+end
+
+local function on_mined_surface_connector(self, entity)
+  local editor_surface = self:editor_surface_for_aboveground_surface(entity.surface)
   local underground_connector = editor_surface.find_entity("pipelayer-connector", entity.position)
-  M.disconnect_underground_pipe(underground_connector)
+  disconnect_underground_pipe(underground_connector)
   underground_connector.destroy()
 end
 
-local function return_to_character_or_spill(player, character, stack)
-  local inserted = character.insert(stack)
-  if inserted < stack.count then
-    player.print({"inventory-restriction.player-inventory-full", game.item_prototypes[stack.name].localised_name})
-    character.surface.spill_item_stack(
-      character.position,
-      {name = stack.name, count = stack.count - inserted})
-  end
-  return inserted
-end
-
-local function return_buffer_to_character(player_index, character, buffer)
-  local player = game.players[player_index]
-  for i=1,#buffer do
-    local stack = buffer[i]
-    if stack.valid_for_read then
-      local inserted = return_to_character_or_spill(player, character, stack)
-      if is_stack_valid_for_editor(stack) then
-        -- match editor player inventory to character inventory
-        stack.count = inserted
-      else
-        -- don't allow placement in editor
-        stack.clear()
-      end
+function Editor:on_player_mined_entity(event)
+  super.on_player_mined_entity(self, event)
+  local entity = event.entity
+  local surface = entity.surface
+  if self:is_editor_surface(surface) then
+    disconnect_underground_pipe(entity)
+  elseif self:is_valid_aboveground_surface(surface) then
+    if entity.name == "pipelayer-connector" then
+      on_mined_surface_connector(self, entity)
+    elseif nonproxy_name(entity.name) then
+      on_mined_bpproxy(self, entity)
     end
   end
 end
 
-local function player_mined_from_editor(event)
-  M.disconnect_underground_pipe(event.entity)
-  local character = player_state[event.player_index].character
-  if character then
-    return_buffer_to_character(event.player_index, character, event.buffer)
-  end
-end
-
-function M.on_player_mined_entity(event)
+function Editor:on_robot_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
-  if surface == editor_surface then
-    player_mined_from_editor(event)
-  elseif surface.name == "nauvis" and entity.name == "pipelayer-connector" then
-    mined_surface_connector(entity)
+  if self:is_valid_aboveground_surface(surface) and entity.name == "pipelayer-connector" then
+    on_mined_surface_connector(self, entity)
   end
+  super.on_robot_mined_entity(self, event)
 end
 
-function M.on_player_mined_item(event)
-  if event.mod_name == "upgrade-planner" then
-    -- upgrade-planner won't insert to character inventory
-    local player = game.players[event.player_index]
-    local character = player_state[event.player_index].character
-    if character then
-      local stack = event.item_stack
-      local count = stack.count
-      local inserted = return_to_character_or_spill(player, character, stack)
-      local excess = count - inserted
-      if excess > 0 then
-        -- try to match editor inventory to character inventory
-        player.remove_item{name = event.item_stack.name, count = excess}
-      end
-    end
-  end
-end
-
-function M.on_robot_mined_entity(_, entity, _)
-  local surface = entity.surface
-  if surface.name == "nauvis" and entity.name == "pipelayer-connector" then
-    mined_surface_connector(entity)
-  end
-end
-
-function M.on_player_rotated_entity(event)
+function Editor:on_player_rotated_entity(event)
   local entity = event.entity
-  if entity.surface ~= editor_surface then return end
-  local surface_connector = game.surfaces.nauvis.find_entity("pipelayer-connector", entity.position)
+  local surface = entity.surface
+  if not self:is_editor_surface(surface) then return end
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(surface)
+  local surface_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
   local old_network = Network.for_entity(entity)
   local new_networks = connected_networks(entity)
   if old_network:is_singleton() and not next(new_networks) then
@@ -420,21 +276,139 @@ function M.on_player_rotated_entity(event)
     old_network:remove_connector_by_below_unit_number(entity.unit_number)
   end
   old_network:remove_underground_pipe(entity)
-  local new_network = M.connect_underground_pipe(entity)
+  local new_network = connect_underground_pipe(entity)
   if surface_connector then
     new_network:add_connector_entity(surface_connector, entity.unit_number)
   end
 end
 
-function M.on_entity_died(event)
+function Editor:on_entity_died(event)
   local entity = event.entity
-  if entity.surface == game.surfaces.nauvis and entity.name == "pipelayer-connector" then
-    mined_surface_connector(entity)
+  if self:is_valid_aboveground_surface(entity.surface) and entity.name == "pipelayer-connector" then
+    on_mined_surface_connector(self, entity)
   end
 end
 
-function M.on_tick(_)
-  sync_player_inventories()
+function M.on_tick(event)
+  return BaseEditor.on_tick(event)
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- deconstruction
+
+local function find_in_area(args)
+  local area = args.area
+  if area.left_top.x >= area.right_bottom.x or area.left_top.y >= area.right_bottom.y then
+    args.position = area.left_top
+    args.area = nil
+  end
+  return args.surface.find_entities_filtered(args)
+end
+
+local function area_contains_connectors(surface, area)
+  return find_in_area{surface = surface, area = area, name = "pipelayer-connector", limit = 1}[1] or
+    find_in_area{surface = surface, area = area, name = "entity-ghost", ghost_name = "pipelayer-connector", limit = 1}[1]
+end
+
+local previous_connector_ghost_deconstruction_tick
+local previous_connector_ghost_deconstruction_player_index
+
+function on_player_deconstructed_surface_area(self, player, area, tool)
+  if not area_contains_connectors(player.surface, area) and
+     not (player.index == previous_connector_ghost_deconstruction_player_index and
+     game.tick == previous_connector_ghost_deconstruction_tick) then
+    return
+  end
+  local editor_surface = self:editor_surface_for_aboveground_surface(player.surface)
+  local underground_entities = self:order_underground_deconstruction(player, editor_surface, area, tool)
+  if next(underground_entities) and
+     settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
+    player.print({"pipelayer-message.marked-for-deconstruction", #underground_entities})
+  end
+end
+
+local function on_player_deconstructed_underground_area(self, player, area, tool)
+  local underground_entities = self:order_underground_deconstruction(player, player.surface, area, tool)
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(player.surface)
+  for _, entity in ipairs(underground_entities) do
+    if is_connector(entity) then
+      local counterpart = aboveground_surface.find_entity("pipelayer-connector", entity.position)
+      if counterpart then
+        counterpart.order_deconstruction(counterpart.force)
+      end
+    end
+  end
+end
+
+function Editor:on_player_deconstructed_area(event)
+  if event.alt then return end
+  local player = game.players[event.player_index]
+  local surface = player.surface
+  local tool = player.cursor_stack
+  if not tool or not tool.valid_for_read or not tool.is_deconstruction_item then return end
+  if self:is_valid_aboveground_surface(surface) then
+    return on_player_deconstructed_surface_area(self, player, event.area, tool)
+  elseif self:is_editor_surface(surface) then
+    return on_player_deconstructed_underground_area(self, player, event.area, tool)
+  end
+end
+
+function Editor:on_pre_ghost_deconstructed(event)
+  super.on_pre_ghost_deconstructed(self, event)
+  if is_connector(event.ghost) then
+    previous_connector_ghost_deconstruction_player_index = player_index
+    previous_connector_ghost_deconstruction_tick = game.tick
+  end
+end
+
+function Editor:on_canceled_deconstruction(event)
+  super.on_canceled_deconstruction(event)
+  local entity = event.entity
+  if entity.valid and is_connector(entity) then
+    local counterpart = self:counterpart_surface(entity.surface).find_entity("pipelayer-connector", entity.position)
+    if counterpart then
+      counterpart.cancel_deconstruction(counterpart.force)
+    end
+  end
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- capture underground pipes as bpproxy ghosts
+
+local function is_output_connector(entity)
+  return entity and Connector.for_below_unit_number(entity.unit_number).mode == "output"
+end
+
+function on_player_setup_aboveground_blueprint(self, event)
+  local player = game.players[event.player_index]
+  local surface = player.surface
+  local editor_surface
+  if self:is_editor_surface(surface) then
+    editor_surface = surface
+  elseif self:is_valid_aboveground_surface(surface) then
+    editor_surface = self:editor_surface_for_aboveground_surface(surface)
+  else
+    return
+  end
+
+  local bp, bp_to_world = self:capture_underground_entities_in_blueprint(event)
+  local bp_entities = bp.get_blueprint_entities()
+
+  for _, bp_entity in ipairs(bp_entities) do
+    if bp_entity.name == "pipelayer-connector" then
+      local position = bp_to_world(bp_entity.position)
+      local ug_pipe = editor_surface.find_entity("pipelayer-connector", position)
+      if is_output_connector(ug_pipe) then
+        bp_entity.name = "pipelayer-output-connector"
+      end
+    end
+  end
+
+  bp.set_blueprint_entities(bp_entities)
+end
+
+function Editor:on_player_setup_blueprint(event)
+  return on_player_setup_aboveground_blueprint(self, event)
 end
 
 return M

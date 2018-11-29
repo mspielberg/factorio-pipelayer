@@ -15,18 +15,11 @@ local active_update_period = 1
 local inactive_update_period
 local no_fluid_update_period
 
-local pipe_capacity_cache = {}
-local function pipe_capacity(name)
-  if not pipe_capacity_cache[name] then
-    pipe_capacity_cache[name] = game.entity_prototypes[name].fluid_capacity
-  end
-  return pipe_capacity_cache[name]
-end
-
+local pipe_filler = {name = "water", amount = math.huge}
 local function fill_pipe(entity, fluid_name)
   if fluid_name then
-    local new_fluid = {name = fluid_name, amount = pipe_capacity(entity.name)}
-    entity.fluidbox[1] = new_fluid
+    pipe_filler.name = fluid_name
+    entity.fluidbox[1] = pipe_filler
   else
     entity.fluidbox[1] = nil
   end
@@ -36,7 +29,7 @@ local function set_update_periods()
   local base_update_period = settings.global["pipelayer-update-period"].value
   inactive_update_period = base_update_period
   no_fluid_update_period = base_update_period * 5
-  log("setting update period to "..base_update_period.." ticks.")
+  debug("setting update period to "..base_update_period.." ticks.")
 end
 
 local Network = {}
@@ -47,7 +40,7 @@ local network_for_entity = {}
 function Network.on_init()
   global.all_networks = {}
   global.network_iter = nil
-  Network:on_load()
+  Network.on_load()
 end
 
 function Network.on_load()
@@ -58,9 +51,7 @@ function Network.on_load()
     Graph.restore(network.graph)
     for unit_number, pipe in pairs(network.pipes) do
       if pipe.valid then
-        network_for_entity[pipe.unit_number] = network
-      else
-        network.pipes[unit_number] = nil
+        network_for_entity[unit_number] = network
       end
     end
     ConnectorSet.restore(network.connectors)
@@ -348,8 +339,8 @@ function Network:update(tick)
   self:reschedule(tick + active_update_period)
 end
 
-function Network.update_all(tick)
-  Scheduler.on_tick(tick)
+function Network.update_all(event)
+  Scheduler.on_tick(event.tick)
 end
 
 function Network.on_runtime_mod_setting_changed(event)
