@@ -171,7 +171,15 @@ local function on_built_aboveground_connector(self, creator, entity, stack)
   end
 end
 
+local function find_connector_ghosts(surface, position)
+  return surface.find_entities_filtered{
+    ghost_name = {"pipelayer-connector", "pipelayer-output-connector"},
+    position = position,
+  }
+end
+
 local function place_connector_ghost(args)
+  local name = args.name
   local surface = args.surface
   local position = args.position
   local direction = args.direction
@@ -180,15 +188,14 @@ local function place_connector_ghost(args)
   ensure_chunk_exists(surface, position)
 
   if args.overwrite then
-    local existing = surface
-      .find_entities_filtered{ghost_name = "pipelayer-connector", position = position}[1]
-      if existing then
-        existing.destroy()
+    local existing = find_connector_ghosts(surface, position)[1]
+    if existing then
+      existing.destroy()
     end
   end
 
   local create_args = {
-    name = "pipelayer-connector",
+    name = name,
     position = position,
     direction = direction,
     force = force,
@@ -208,8 +215,9 @@ end
 local function on_built_connector_ghost_aboveground(self, ghost)
   local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
   local position = ghost.position
-  if editor_surface.count_entities_filtered{ghost_name = "pipelayer-connector", position=position} == 0 then
+  if not next(find_connector_ghosts(editor_surface, position)) then
     place_connector_ghost{
+      name = "pipelayer-connector",
       surface = editor_surface,
       position = ghost.position,
       direction = opposite_direction(ghost.direction),
@@ -220,13 +228,14 @@ local function on_built_connector_ghost_aboveground(self, ghost)
 end
 
 local function on_built_connector_ghost_in_editor(self, ghost)
+  local name = ghost.ghost_name
   local editor_surface = ghost.surface
   local position = ghost.position
   local direction = ghost.direction
   local force = ghost.force
   local last_user = ghost.last_user
 
-  if editor_surface.count_entities_filtered{ghost_name = "pipelayer-connector", position = position} > 1 then
+  if #find_connector_ghosts(editor_surface, position) > 1 then
     -- bpproxy was already built here, so use direction as is
     ghost.destroy()
   else
@@ -236,6 +245,7 @@ local function on_built_connector_ghost_in_editor(self, ghost)
 
   -- move ourselves above ground
   place_connector_ghost{
+    name = name,
     surface = self:aboveground_surface_for_editor_surface(editor_surface),
     position = position,
     direction = direction,
@@ -258,6 +268,7 @@ end
 local function on_built_connector_bpproxy_ghost_aboveground(self, bpproxy_ghost)
   local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy_ghost.surface)
   place_connector_ghost{
+    name = "pipelayer-connector",
     surface = editor_surface,
     position = bpproxy_ghost.position,
     direction = bpproxy_ghost.direction,
@@ -272,12 +283,10 @@ local function on_built_connector_bpproxy_ghost_in_editor(self, bpproxy_ghost)
   local position = bpproxy_ghost.position
 
   -- check for connector ghost to move above ground
-  local existing_connector_ghost = editor_surface.find_entities_filtered{
-    ghost_name = "pipelayer-connector",
-    position = position,
-  }[1]
+  local existing_connector_ghost = find_connector_ghosts(editor_surface, position)[1]
   if existing_connector_ghost then
     place_connector_ghost{
+      name = existing_connector_ghost.ghost_name,
       surface = self:aboveground_surface_for_editor_surface(editor_surface),
       position = position,
       direction = existing_connector_ghost.direction,
@@ -288,6 +297,7 @@ local function on_built_connector_bpproxy_ghost_in_editor(self, bpproxy_ghost)
   end
 
   place_connector_ghost{
+    name = "pipelayer-connector",
     surface = editor_surface,
     position = bpproxy_ghost.position,
     direction = bpproxy_ghost.direction,
@@ -317,7 +327,7 @@ function Editor:on_built_entity(event)
   local entity = event.created_entity
   if entity.name == "entity-ghost" then
     -- special handling for connector ghosts
-    if entity.ghost_name == "pipelayer-connector" then
+    if entity.ghost_name == "pipelayer-connector" or entity.ghost_name == "pipelayer-output-connector" then
       return on_built_connector_ghost(self, entity)
     elseif entity.ghost_name == "pipelayer-bpproxy-pipelayer-connector" then
       return on_built_connector_bpproxy_ghost(self, entity)
@@ -397,7 +407,8 @@ end
 function Editor:on_pre_player_mined_item(event)
   super.on_pre_player_mined_item(self, event)
   local entity = event.entity
-  if entity.name == "entity-ghost" and entity.ghost_name == "pipelayer-connector" then
+  if entity.name == "entity-ghost" and
+     (entity.ghost_name == "pipelayer-connector" or entity.ghost_name == "pipelayer-output-connector") then
     on_connector_ghost_removed(self, entity)
   end
 end
@@ -420,8 +431,12 @@ end
 function Editor:on_robot_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
-  if self:is_valid_aboveground_surface(surface) and entity.name == "pipelayer-connector" then
-    on_mined_surface_connector(self, entity)
+  if self:is_valid_aboveground_surface(surface) then
+    if entity.name == "pipelayer-connector" then
+      on_mined_surface_connector(self, entity)
+    elseif nonproxy_name(entity.name) then
+      on_mined_bpproxy(self, entity)
+    end
   end
   super.on_robot_mined_entity(self, event)
 end
@@ -471,21 +486,51 @@ local function find_in_area(args)
 end
 
 local function area_contains_connectors(surface, area)
-  return find_in_area{surface = surface, area = area, name = "pipelayer-connector", limit = 1}[1] or
-    find_in_area{surface = surface, area = area, name = "entity-ghost", ghost_name = "pipelayer-connector", limit = 1}[1]
+  return
+    find_in_area{
+      surface = surface,
+      area = area,
+      name = "pipelayer-connector",
+      limit = 1,
+    }[1] or
+    find_in_area{
+      surface = surface,
+      area = area,
+      name = "entity-ghost",
+      ghost_name = {"pipelayer-connector", "pipelayer-output-connector"},
+      limit = 1,
+    }[1]
 end
 
 local previous_connector_ghost_deconstruction_tick
 local previous_connector_ghost_deconstruction_player_index
 
-function on_player_deconstructed_surface_area(self, player, area, tool)
-  if not area_contains_connectors(player.surface, area) and
+local function remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
+  for _, entity in ipairs(underground_entities) do
+    if is_connector(entity) then
+      local bpproxy = aboveground_surface.find_entity("pipelayer-bpproxy-pipelayer-connector", entity.position)
+      if bpproxy then
+        bpproxy.destroy()
+      end
+      local aboveground_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
+      if aboveground_connector then
+        aboveground_connector.order_deconstruction(aboveground_connector.force)
+      end
+    end
+  end
+end
+
+local function on_player_deconstructed_surface_area(self, player, area, tool)
+  local aboveground_surface = player.surface
+  if not area_contains_connectors(aboveground_surface, area) and
      not (player.index == previous_connector_ghost_deconstruction_player_index and
      game.tick == previous_connector_ghost_deconstruction_tick) then
     return
   end
-  local editor_surface = self:editor_surface_for_aboveground_surface(player.surface)
+  local editor_surface = self:editor_surface_for_aboveground_surface(aboveground_surface)
   local underground_entities = self:order_underground_deconstruction(player, editor_surface, area, tool)
+  remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
+
   if next(underground_entities) and
      settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
     player.print({"pipelayer-message.marked-for-deconstruction", #underground_entities})
@@ -495,14 +540,7 @@ end
 local function on_player_deconstructed_underground_area(self, player, area, tool)
   local underground_entities = self:order_underground_deconstruction(player, player.surface, area, tool)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(player.surface)
-  for _, entity in ipairs(underground_entities) do
-    if is_connector(entity) then
-      local counterpart = aboveground_surface.find_entity("pipelayer-connector", entity.position)
-      if counterpart then
-        counterpart.order_deconstruction(counterpart.force)
-      end
-    end
-  end
+  remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
 end
 
 function Editor:on_player_deconstructed_area(event)
