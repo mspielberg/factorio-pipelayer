@@ -1,4 +1,5 @@
 local BaseEditor = require "lualib.BaseEditor.BaseEditor"
+local Connector = require "Connector"
 local Network = require "Network"
 
 local M = {}
@@ -36,6 +37,13 @@ end
 local function underground_counterpart_for_bpproxy(self, bpproxy)
   local name = nonproxy_name(bpproxy.name)
   return self:editor_surface_for_aboveground_surface(bpproxy.surface).find_entity(name, bpproxy.position)
+end
+
+local function ensure_chunk_exists(editor_surface, position)
+  if not editor_surface.is_chunk_generated(position) then
+    editor_surface.request_to_generate_chunks(position, 1)
+    editor_surface.force_generate_chunk_requests()
+  end
 end
 
 function Editor:toggle_connector_mode(player_index)
@@ -136,6 +144,7 @@ local function on_built_aboveground_connector(self, creator, entity, stack)
   end
 
   local editor_surface = self:editor_surface_for_aboveground_surface(surface)
+  ensure_chunk_exists(editor_surface, position)
 
   -- check for existing underground connector ghost
   local underground_ghost = editor_surface.find_entity("entity-ghost", position)
@@ -162,11 +171,142 @@ local function on_built_aboveground_connector(self, creator, entity, stack)
   end
 end
 
-local function on_built_ghost(ghost)
-  if ghost.ghost_name == "pipelayer-bpproxy-pipelayer-connector" then
-    -- we already have the pipelayer-connector ghost on the editor surface
+local function place_connector_ghost(args)
+  local surface = args.surface
+  local position = args.position
+  local direction = args.direction
+  local force = args.force
+  local last_user = args.last_user
+  ensure_chunk_exists(surface, position)
+
+  if args.overwrite then
+    local existing = surface
+      .find_entities_filtered{ghost_name = "pipelayer-connector", position = position}[1]
+      if existing then
+        existing.destroy()
+    end
+  end
+
+  local create_args = {
+    name = "pipelayer-connector",
+    position = position,
+    direction = direction,
+    force = force,
+    build_check_type = defines.build_check_type.ghost_place,
+  }
+  if surface.can_place_entity(create_args) then
+    create_args.inner_name = create_args.name
+    create_args.name = "entity-ghost"
+    create_args.build_check_type = nil
+    local ghost = surface.create_entity(create_args)
+    ghost.last_user = last_user
+    return ghost
+  end
+  return nil
+end
+
+local function on_built_connector_ghost_aboveground(self, ghost)
+  local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
+  local position = ghost.position
+  if editor_surface.count_entities_filtered{ghost_name = "pipelayer-connector", position=position} == 0 then
+    place_connector_ghost{
+      surface = editor_surface,
+      position = ghost.position,
+      direction = opposite_direction(ghost.direction),
+      force = ghost.force,
+      last_user = ghost.last_user,
+    }
+  end
+end
+
+local function on_built_connector_ghost_in_editor(self, ghost)
+  local editor_surface = ghost.surface
+  local position = ghost.position
+  local direction = ghost.direction
+  local force = ghost.force
+  local last_user = ghost.last_user
+
+  if editor_surface.count_entities_filtered{ghost_name = "pipelayer-connector", position = position} > 1 then
+    -- bpproxy was already built here, so use direction as is
+    ghost.destroy()
+  else
+    -- no bpproxy, use straight-through direction
+    direction = opposite_direction(direction)
+  end
+
+  -- move ourselves above ground
+  place_connector_ghost{
+    surface = self:aboveground_surface_for_editor_surface(editor_surface),
+    position = position,
+    direction = direction,
+    force = ghost.force,
+    last_user = ghost.last_user,
+  }
+end
+
+local function on_built_connector_ghost(self, ghost)
+  local surface = ghost.surface
+  if self:is_valid_aboveground_surface(surface) then
+    return on_built_connector_ghost_aboveground(self, ghost)
+  elseif self:is_editor_surface(surface) then
+    return on_built_connector_ghost_in_editor(self, ghost)
+  else
     ghost.destroy()
   end
+end
+
+local function on_built_connector_bpproxy_ghost_aboveground(self, bpproxy_ghost)
+  local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy_ghost.surface)
+  place_connector_ghost{
+    surface = editor_surface,
+    position = bpproxy_ghost.position,
+    direction = bpproxy_ghost.direction,
+    force = bpproxy_ghost.force,
+    last_user = bpproxy_ghost.last_user,
+    overwrite = true,
+  }
+end
+
+local function on_built_connector_bpproxy_ghost_in_editor(self, bpproxy_ghost)
+  local editor_surface = bpproxy_ghost.surface
+  local position = bpproxy_ghost.position
+
+  -- check for connector ghost to move above ground
+  local existing_connector_ghost = editor_surface.find_entities_filtered{
+    ghost_name = "pipelayer-connector",
+    position = position,
+  }[1]
+  if existing_connector_ghost then
+    place_connector_ghost{
+      surface = self:aboveground_surface_for_editor_surface(editor_surface),
+      position = position,
+      direction = existing_connector_ghost.direction,
+      force = existing_connector_ghost.force,
+      last_user = existing_connector_ghost.last_user,
+      overwrite = true,
+    }
+  end
+
+  place_connector_ghost{
+    surface = editor_surface,
+    position = bpproxy_ghost.position,
+    direction = bpproxy_ghost.direction,
+    force = bpproxy_ghost.force,
+    last_user = bpproxy_ghost.last_user,
+    overwrite = true,
+  }
+end
+
+
+local function on_built_connector_bpproxy_ghost(self, bpproxy_ghost)
+  local surface = bpproxy_ghost.surface
+  local editor_surface = self:get_editor_surface(surface)
+  if editor_surface == surface then
+    on_built_connector_bpproxy_ghost_in_editor(self, bpproxy_ghost)
+  elseif editor_surface then
+    on_built_connector_bpproxy_ghost_aboveground(self, bpproxy_ghost)
+  end
+  bpproxy_ghost.destroy()
 end
 
 local function item_for_entity(entity)
@@ -174,13 +314,24 @@ local function item_for_entity(entity)
 end
 
 function Editor:on_built_entity(event)
+  local entity = event.created_entity
+  if entity.name == "entity-ghost" then
+    -- special handling for connector ghosts
+    if entity.ghost_name == "pipelayer-connector" then
+      return on_built_connector_ghost(self, entity)
+    elseif entity.ghost_name == "pipelayer-bpproxy-pipelayer-connector" then
+      return on_built_connector_bpproxy_ghost(self, entity)
+    end
+  end
+
   super.on_built_entity(self, event)
   local player_index = event.player_index
   local player = game.players[player_index]
-  local entity = event.created_entity
-  if not entity.valid then return end
+  if not entity.valid then
+    return
+  end
   if entity.name == "entity-ghost" then
-    return on_built_ghost(entity)
+    return on_built_ghost(self, entity)
   end
   local stack = event.stack
   local surface = entity.surface
@@ -235,6 +386,22 @@ local function on_mined_surface_connector(self, entity)
   local underground_connector = editor_surface.find_entity("pipelayer-connector", entity.position)
   disconnect_underground_pipe(underground_connector)
   underground_connector.destroy()
+end
+
+local function on_connector_ghost_removed(self, connector_ghost)
+  local surface = self:counterpart_surface(connector_ghost.surface)
+  local counterpart_ghost = surface.find_entity("entity-ghost", connector_ghost.position)
+  if counterpart_ghost then
+    counterpart_ghost.destroy()
+  end
+end
+
+function Editor:on_pre_player_mined_item(event)
+  super.on_pre_player_mined_item(self, event)
+  local entity = event.entity
+  if entity.name == "entity-ghost" and entity.ghost_name == "pipelayer-connector" then
+    on_connector_ghost_removed(self, entity)
+  end
 end
 
 function Editor:on_player_mined_entity(event)
@@ -355,9 +522,11 @@ end
 
 function Editor:on_pre_ghost_deconstructed(event)
   super.on_pre_ghost_deconstructed(self, event)
-  if is_connector(event.ghost) then
+  local ghost = event.ghost
+  if is_connector(ghost) then
     previous_connector_ghost_deconstruction_player_index = player_index
     previous_connector_ghost_deconstruction_tick = game.tick
+    on_connector_ghost_removed(self, ghost)
   end
 end
 
