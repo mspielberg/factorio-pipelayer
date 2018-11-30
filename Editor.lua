@@ -327,12 +327,10 @@ function Editor:on_built_entity(event)
   super.on_built_entity(self, event)
   local player_index = event.player_index
   local player = game.players[player_index]
-  if not entity.valid then
+  if not entity.valid or entity.name == "entity-ghost" then
     return
   end
-  if entity.name == "entity-ghost" then
-    return on_built_ghost(self, entity)
-  end
+
   local stack = event.stack
   local surface = entity.surface
 
