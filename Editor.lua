@@ -567,7 +567,7 @@ function Editor:on_pre_ghost_deconstructed(event)
 end
 
 function Editor:on_canceled_deconstruction(event)
-  super.on_canceled_deconstruction(event)
+  super.on_canceled_deconstruction(self, event)
   local entity = event.entity
   if entity.valid and is_connector(entity) then
     local counterpart = self:counterpart_surface(entity.surface).find_entity("pipelayer-connector", entity.position)
