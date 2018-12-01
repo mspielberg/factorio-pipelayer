@@ -616,4 +616,19 @@ function Editor:on_player_setup_blueprint(event)
   return on_player_setup_aboveground_blueprint(self, event)
 end
 
+---------------------------------------------------------------------------------------------------
+-- PickerPipeTools compatibility
+
+function Editor:script_raised_built(event)
+  if event.mod_name == "PickerPipeTools" then
+    local entity = event.created_entity
+    local old_unit_number = event.replaced_entity_unit_number
+    if entity and old_unit_number then
+      local network = Network.for_unit_number(old_unit_number)
+      game.players[event.player_index].print("replacing "..old_unit_number.." with "..entity.unit_number.." in network "..network.id)
+      network:replace_underground_pipe(entity, old_unit_number)
+    end
+  end
+end
+
 return M
