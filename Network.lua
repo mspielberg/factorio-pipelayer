@@ -88,8 +88,12 @@ function Network.new()
   return self
 end
 
+function Network.for_unit_number(unit_number)
+  return network_for_entity[unit_number]
+end
+
 function Network.for_entity(entity)
-  return network_for_entity[entity.unit_number]
+  return Network.for_unit_number(entity.unit_number)
 end
 
 function Network:destroy()
@@ -185,6 +189,22 @@ function Network:remove_underground_pipe(entity)
   self.graph:remove(unit_number)
   if not next(self.pipes) then
     self:destroy()
+  end
+end
+
+function Network:replace_underground_pipe(new_entity, old_unit_number)
+  self.pipes[old_unit_number] = nil
+  network_for_entity[old_unit_number] = nil
+  self.graph:remove(old_unit_number)
+
+  self:add_underground_pipe(new_entity)
+
+  local neighbors = new_entity.neighbours[1]
+  for _, neighbor in ipairs(neighbors) do
+    local neighbor_network = Network.for_entity(neighbor)
+    if neighbor_network ~= self then
+      self:absorb(neighbor_network)
+    end
   end
 end
 
