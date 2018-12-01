@@ -1,4 +1,5 @@
 local configchange = require "configchange"
+local console = require "console"
 local Editor = require "Editor"
 local Network = require "Network"
 
@@ -104,3 +105,6 @@ script.on_event("pipelayer-toggle-connector-mode", on_toggle_connector_mode)
 for event_name, handler in pairs(event_handlers) do
   script.on_event(defines.events[event_name], handler)
 end
+
+script.on_event(defines.events.on_gui_click, console.on_gui_click)
+remote.add_interface("pipelayer", {console = console.create_gui})
