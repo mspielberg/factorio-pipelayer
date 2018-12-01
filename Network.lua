@@ -1,12 +1,13 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
 local Constants = require "Constants"
+local inspect = require "inspect"
 local Graph = require "lualib.Graph"
 local Scheduler = require "lualib.Scheduler"
 
 local debug = function() end
 if Constants.DEBUG_ENABLED then
-  debug = function(x) log(serpent.block(x, {name = "_"})) end
+  debug = function(x) log(inspect(x)) end
 end
 
 local SURFACE_NAME = Constants.SURFACE_NAME
@@ -263,6 +264,8 @@ function Network:set_fluid(fluid_name)
   local fluid_for_filling
   if fluid_name == "PIPELAYER-CONFLICT" then
     fluid_for_filling = nil
+  else
+    fluid_for_filling = fluid_name
   end
 
   if fluid_name then
@@ -346,6 +349,8 @@ function Network:update(tick)
   -- debug{input=next_input_connector, output=next_output_connector}
   if not next_input_connector or not next_output_connector then
     debug("network "..self.id.." is not ready for transfer")
+    -- disabled do judge performance cost
+    --self:infer_fluid()
     self:reschedule(tick + inactive_update_period)
     return
   end
