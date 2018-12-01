@@ -1,4 +1,5 @@
 local configchange = require "configchange"
+local console = require "lualib.BaseEditor.console"
 local Editor = require "Editor"
 local Network = require "Network"
 
@@ -26,6 +27,10 @@ local function on_configuration_changed(data)
 end
 
 local event_handlers = {
+  script_raised_built = function(event)
+    editor:script_raised_built(event)
+  end,
+
   on_built_entity = function(event)
     editor:on_built_entity(event)
   end,
