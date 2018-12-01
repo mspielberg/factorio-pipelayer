@@ -161,8 +161,10 @@ end
 
 function Network:remove_underground_pipe(entity)
   assert(entity.surface.name == SURFACE_NAME)
+  local connector_for_below_unit_number = Connector.for_below_unit_number
   local unit_number = entity.unit_number
-  self.pipes[unit_number] = nil
+  local pipes = self.pipes
+  pipes[unit_number] = nil
   self:remove_connector_by_below_unit_number(unit_number)
   network_for_entity[unit_number] = nil
 
@@ -173,13 +175,13 @@ function Network:remove_underground_pipe(entity)
       local fragment = fragments[i]
       local split_network = Network.new()
       for fragment_pipe_unit_number in pairs(fragment) do
-        split_network:add_underground_pipe(self.pipes[fragment_pipe_unit_number])
-        local connector = Connector.for_below_unit_number(fragment_pipe_unit_number)
+        split_network:add_underground_pipe(pipes[fragment_pipe_unit_number])
+        local connector = connector_for_below_unit_number(fragment_pipe_unit_number)
         if connector then
           split_network:add_connector(connector)
           self.connectors:remove(connector)
         end
-        self.pipes[fragment_pipe_unit_number] = nil
+        pipes[fragment_pipe_unit_number] = nil
         self.graph:remove(fragment_pipe_unit_number)
       end
       split_network.graph:remove(unit_number)
@@ -187,7 +189,7 @@ function Network:remove_underground_pipe(entity)
   end
 
   self.graph:remove(unit_number)
-  if not next(self.pipes) then
+  if not next(pipes) then
     self:destroy()
   end
 end
@@ -258,17 +260,24 @@ end
 function Network:set_fluid(fluid_name)
   debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
-  self:foreach_underground_entity(function(entity)
-    fill_pipe(entity, self.fluid_name)
-  end)
-  local surface = game.surfaces[SURFACE_NAME]
+  local fluid_for_filling
+  if fluid_name == "PIPELAYER-CONFLICT" then
+    fluid_for_filling = nil
+  end
 
-  if not fluid_name then
+  if fluid_name then
+    self:foreach_underground_entity(function(entity)
+      fill_pipe(entity, fluid_for_filling)
+    end)
+  end
+
+  if not fluid_for_filling then
+    local surface = game.surfaces[SURFACE_NAME]
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
       local counterpart = surface.find_entity("pipelayer-connector", connector.entity.position)
       local fluidbox = connector.entity.fluidbox[1]
-      if fluidbox and fluidbox.amount > 0 then
+      if fluidbox then
         fill_pipe(counterpart, fluidbox.name)
       end
     end)
@@ -293,7 +302,7 @@ function Network:infer_fluid_from_connectors()
     end
   end)
   if conflict then
-    return nil
+    return "PIPELAYER-CONFLICT"
   else
     return inferred_fluid
   end
@@ -324,7 +333,7 @@ end
 function Network:update(tick)
   if not all_networks[self.id] then return end
 
-  if not self.fluid_name then
+  if not self.fluid_name or self.fluid_name == "PIPELAYER-CONFLICT" then
     local success = self:infer_fluid()
     if not success then
       self:reschedule(tick + no_fluid_update_period)
@@ -352,7 +361,7 @@ function Network:update(tick)
   else
     if next_input_connector:is_conflicting(self.fluid_name)
     or next_output_connector:is_conflicting(self.fluid_name) then
-      self:set_fluid(nil)
+      self:set_fluid("PIPELAYER-CONFLICT")
     end
   end
 
