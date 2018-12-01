@@ -470,7 +470,8 @@ function Editor:on_entity_died(event)
 end
 
 function M.on_tick(event)
-  return BaseEditor.on_tick(event)
+  Network.update_all(event)
+  BaseEditor.on_tick(event)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
