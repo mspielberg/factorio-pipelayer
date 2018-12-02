@@ -30,4 +30,14 @@ data:extend{
     minimum_value = 1,
     default_value = 2500,
   },
+
+  {
+    type = 'int-setting',
+    name = 'pipelayer-max-distance-checked',
+    setting_type = 'runtime-global',
+    minimum_value = 50,
+    maximum_value = 500,
+    default_value = 80,
+    order = 'a'
+},
 }
