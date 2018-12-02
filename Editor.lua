@@ -599,6 +599,7 @@ function on_player_setup_aboveground_blueprint(self, event)
 
   local bp, bp_to_world = self:capture_underground_entities_in_blueprint(event)
   local bp_entities = bp.get_blueprint_entities()
+  if not bp_entities then return end
 
   for _, bp_entity in ipairs(bp_entities) do
     if bp_entity.name == "pipelayer-connector" then
