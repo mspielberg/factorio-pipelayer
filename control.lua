@@ -3,6 +3,7 @@ local console = require "console"
 local Editor = require "Editor"
 local Network = require "Network"
 
+require "PipeMarker"
 local editor
 
 local function on_init()
