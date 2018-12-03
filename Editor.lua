@@ -1,5 +1,6 @@
 local BaseEditor = require "lualib.BaseEditor.BaseEditor"
 local Connector = require "Connector"
+local inspect = require "inspect"
 local Network = require "Network"
 local PipeMarker = require "PipeMarker"
 
