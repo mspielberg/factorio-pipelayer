@@ -85,7 +85,7 @@ local function destroy_markers(markers)
   end
 end
 
-local function highlight_pipelayer_surface(player_index)
+local function highlight_pipelayer_surface(player_index, editor_surface)
 
     --? Get player and build player's global data table for markers
     local player = game.players[player_index]
@@ -158,7 +158,7 @@ local function highlight_pipelayer_surface(player_index)
     }
 
     --? Get pipes within filter area and cache them
-    for _, entity in pairs(game.surfaces["pipelayer"].find_entities_filtered(filter)) do
+    for _, entity in pairs(editor_surface.find_entities_filtered(filter)) do
         local entity_unit_number = entity.unit_number
         local entity_position = entity.position
         local entity_neighbours = entity.neighbours[1]
@@ -229,7 +229,7 @@ function M.update_pipelayer_markers(player, editor_surface)
   --if not pdata.disable_auto_highlight then
     local cursor_item = player.cursor_stack.valid_for_read and player.cursor_stack.name
     if cursor_item and cursor_item == 'pipelayer-connector' then
-      highlight_pipelayer_surface(player, editor_surface)
+      highlight_pipelayer_surface(player_index, editor_surface)
     end
   --end
 end
