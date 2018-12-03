@@ -633,21 +633,12 @@ function Editor:script_raised_built(event)
   end
 end
 
-local function maybe_draw_markers(self, player)
+function Editor:on_player_cursor_stack_changed(event)
+  local player = game.players[event.player_index]
   local editor_surface = self:get_editor_surface(player.surface)
   if editor_surface then
     PipeMarker.update_pipelayer_markers(player, editor_surface)
   end
-end
-
-function Editor:on_player_cursor_stack_changed(event)
-  local player = game.players[event.player_index]
-  maybe_draw_markers(self, player)
-end
-
-function Editor:on_player_changed_position(event)
-  local player = game.players[event.player_index]
-  maybe_draw_markers(self, player)
 end
 
 return M
