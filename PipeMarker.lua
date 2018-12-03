@@ -87,124 +87,122 @@ end
 
 local function highlight_pipelayer_surface(player_index, editor_surface)
 
-    --? Get player and build player's global data table for markers
-    local player = game.players[player_index]
-    local pdata = global.players[player_index]
+  --? Get player and build player's global data table for markers
+  local player = game.players[player_index]
+  local pdata = global.players[player_index]
 
-    --? Declare working tables
-    local read_entity_data = {}
-    local all_entities_marked = {}
-    local all_markers = {}
+  --? Declare working tables
+  local read_entity_data = {}
+  local all_entities_marked = {}
+  local all_markers = {}
 
-    --? Assign working table references to global reference under player
-    pdata.current_pipelayer_marker_table = all_markers
-    pdata.current_pipelayer_table = all_entities_marked
+  --? Assign working table references to global reference under player
+  pdata.current_pipelayer_marker_table = all_markers
+  pdata.current_pipelayer_table = all_entities_marked
 
-    --? Setting and cache create entity function
-    local max_distance = settings.global['pipelayer-max-distance-checked'].value
-    local create = player.surface.create_entity
+  --? Setting and cache create entity function
+  local max_distance = settings.global['pipelayer-max-distance-checked'].value
+  local create = player.surface.create_entity
 
-    --? Variables
-    local markers_made = 0
+  --? Variables
+  local markers_made = 0
 
-    --? Draws marker at position based on connected directions
-    local function draw_marker(position, directions)
-        markers_made = markers_made + 1
-        all_markers[markers_made] =
-            create {
-            name = 'pipelayer-pipe-dot' .. directional_table[directions],
-            position = position
-        }
-    end
-
-    --? Handles drawing dashes between two pipe to ground.
-    local function draw_dashes(entity_position, neighbour_position)
-        markers_made = markers_made + 1
-        all_markers[markers_made] =
-            create {
-            name = 'pipelayer-pipe-marker-beam',
-            position = entity_position,
-            --? Beam source position is off. Have to compensate by shifting down one tile.
-            source_position = {entity_position.x, entity_position.y + 1},
-            --TODO 0.17 source_position = {entity_position.x, entity_position.y},
-            target_position = {neighbour_position.x, neighbour_position.y},
-            duration = 2000000000
-        }
-    end
-
-    local function get_directions(entity_position, entity_neighbours)
-        local table_entry = 0
-        local directions_table = {}
-        --? Store the direction as the index in a table. This allows multiple references to the same direction, such as in the case of pipemod pipes.
-        for _, neighbour_unit_number in pairs(entity_neighbours) do
-            --? Retreive cached data about neighbour
-            local current_neighbour = read_entity_data[neighbour_unit_number]
-            if current_neighbour then
-                directions_table[get_direction(entity_position, current_neighbour[1])] = true
-            end
-        end
-        --? Step over table and add together 2^direction to enter directional table for name concatenation to spawn correct marker
-        for directions, _ in pairs(directions_table) do
-            table_entry = table_entry + (2 ^ directions)
-        end
-        return table_entry
-    end
-
-    --? Construct filter table fed to function below
-    local filter = {
-        area = {{player.position.x - max_distance, player.position.y - max_distance}, {player.position.x + max_distance, player.position.y + max_distance}},
-        type = {'pipe-to-ground', 'pipe', 'storage-tank'},
-        force = player.force
+  --? Draws marker at position based on connected directions
+  local function draw_marker(position, directions)
+    markers_made = markers_made + 1
+    all_markers[markers_made] = create{
+      name = 'pipelayer-pipe-dot' .. directional_table[directions],
+      position = position
     }
+  end
 
-    --? Get pipes within filter area and cache them
-    for _, entity in pairs(editor_surface.find_entities_filtered(filter)) do
-        local entity_unit_number = entity.unit_number
-        local entity_position = entity.position
-        local entity_neighbours = entity.neighbours[1]
-        local entity_type = entity.type
-        local entity_name = entity.name
+  --? Handles drawing dashes between two pipe to ground.
+  local function draw_dashes(entity_position, neighbour_position)
+    markers_made = markers_made + 1
+    all_markers[markers_made] = create{
+      name = 'pipelayer-pipe-marker-beam',
+      position = entity_position,
+      --? Beam source position is off. Have to compensate by shifting down one tile.
+      source_position = {entity_position.x, entity_position.y + 1},
+      --TODO 0.17 source_position = {entity_position.x, entity_position.y},
+      target_position = {neighbour_position.x, neighbour_position.y},
+      duration = 2000000000
+    }
+  end
 
-        --? Verify entity is allowed to be stored
-        if allowed_types[entity_type] and not not_allowed_names[entity_name] then
-            read_entity_data[entity_unit_number] = {
-                entity_position,
-                entity_neighbours,
-                entity_type,
-                entity_name
-            }
-        end
+  local function get_directions(entity_position, entity_neighbours)
+    local table_entry = 0
+    local directions_table = {}
+    --? Store the direction as the index in a table. This allows multiple references to the same direction, such as in the case of pipemod pipes.
+    for _, neighbour_unit_number in pairs(entity_neighbours) do
+      --? Retreive cached data about neighbour
+      local current_neighbour = read_entity_data[neighbour_unit_number]
+      if current_neighbour then
+        directions_table[get_direction(entity_position, current_neighbour[1])] = true
+      end
+    end
+    --? Step over table and add together 2^direction to enter directional table for name concatenation to spawn correct marker
+    for directions, _ in pairs(directions_table) do
+      table_entry = table_entry + (2 ^ directions)
+    end
+    return table_entry
+  end
 
-        --? Convert neighbour table to unit number references to gain access to already cached data above at later point
-        for neighbour_index_number, neighbour in pairs(entity_neighbours) do
-            local neighbour_unit_number = neighbour.unit_number
-            entity_neighbours[neighbour_index_number] = neighbour_unit_number
-        end
+  --? Construct filter table fed to function below
+  local filter = {
+    area = {{player.position.x - max_distance, player.position.y - max_distance}, {player.position.x + max_distance, player.position.y + max_distance}},
+    type = {'pipe-to-ground', 'pipe', 'storage-tank'},
+    force = player.force
+  }
+
+  --? Get pipes within filter area and cache them
+  for _, entity in pairs(editor_surface.find_entities_filtered(filter)) do
+    local entity_unit_number = entity.unit_number
+    local entity_position = entity.position
+    local entity_neighbours = entity.neighbours[1]
+    local entity_type = entity.type
+    local entity_name = entity.name
+
+    --? Verify entity is allowed to be stored
+    if allowed_types[entity_type] and not not_allowed_names[entity_name] then
+      read_entity_data[entity_unit_number] = {
+        entity_position,
+        entity_neighbours,
+        entity_type,
+        entity_name
+      }
     end
 
-    --? Step through all cached pipes
-    for unit_number, current_entity in pairs(read_entity_data) do
-        --? Ensure no double marking
-        if not all_entities_marked[unit_number] then
-            --? Draw dashed beam entity if pipe_to_ground
-            if draw_dashes_types[current_entity[3]] or draw_dashes_names[current_entity[4]] then
-                for _, neighbour_unit_number in pairs(current_entity[2]) do
-                    --? Retrieve cached neighbour data
-                    local current_neighbour = read_entity_data[neighbour_unit_number]
-                    if current_neighbour then
-                        --? Ensure it's a valid name or type to draw dashes between. Don't draw dashes between "clamped" pipes (They are pipe to ground entities) and ensure we're not marking towards an already marked entity
-                        if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not string.find(current_neighbour[4], '%-clamped%-') and not all_entities_marked[neighbour_unit_number] then
-                            draw_dashes(current_entity[1], current_neighbour[1])
-                        end
-                    end
-                end
+    --? Convert neighbour table to unit number references to gain access to already cached data above at later point
+    for neighbour_index_number, neighbour in pairs(entity_neighbours) do
+      local neighbour_unit_number = neighbour.unit_number
+      entity_neighbours[neighbour_index_number] = neighbour_unit_number
+    end
+  end
+
+  --? Step through all cached pipes
+  for unit_number, current_entity in pairs(read_entity_data) do
+    --? Ensure no double marking
+    if not all_entities_marked[unit_number] then
+      --? Draw dashed beam entity if pipe_to_ground
+      if draw_dashes_types[current_entity[3]] or draw_dashes_names[current_entity[4]] then
+        for _, neighbour_unit_number in pairs(current_entity[2]) do
+          --? Retrieve cached neighbour data
+          local current_neighbour = read_entity_data[neighbour_unit_number]
+          if current_neighbour then
+            --? Ensure it's a valid name or type to draw dashes between. Don't draw dashes between "clamped" pipes (They are pipe to ground entities) and ensure we're not marking towards an already marked entity
+            if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not string.find(current_neighbour[4], '%-clamped%-') and not all_entities_marked[neighbour_unit_number] then
+              draw_dashes(current_entity[1], current_neighbour[1])
             end
-            --? Draw a marker on the current entity with lines pointing towards each neighbour (Overlaps beam drawings without an issue)
-            draw_marker(current_entity[1], get_directions(current_entity[1], current_entity[2]))
-            --? Set current entity as marked
-            all_entities_marked[unit_number] = true
+          end
         end
+      end
+      --? Draw a marker on the current entity with lines pointing towards each neighbour (Overlaps beam drawings without an issue)
+      draw_marker(current_entity[1], get_directions(current_entity[1], current_entity[2]))
+      --? Set current entity as marked
+      all_entities_marked[unit_number] = true
     end
+  end
 end
 
 function M.update_pipelayer_markers(player, editor_surface)
