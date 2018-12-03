@@ -34,7 +34,6 @@ local event_handlers = {
   on_entity_died                 = function(event) editor:on_entity_died(event)                  end,
   on_marked_for_deconstruction   = function(event) editor:on_marked_for_deconstruction(event)    end,
   on_picked_up_item              = function(event) editor:on_picked_up_item(event)               end,
-  on_player_changed_position     = function(event) editor:on_player_changed_position(event)      end,
   on_player_cursor_stack_changed = function(event) editor:on_player_cursor_stack_changed(event)  end,
   on_player_deconstructed_area   = function(event) editor:on_player_deconstructed_area(event)    end,
   on_player_mined_entity         = function(event) editor:on_player_mined_entity(event)          end,
