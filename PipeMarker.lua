@@ -85,6 +85,8 @@ local function destroy_markers(markers)
   end
 end
 
+local bor = bit32.bor
+local lshift = bit32.lshift
 local function highlight_pipelayer_surface(player_index, editor_surface)
 
   --? Get player and build player's global data table for markers
@@ -132,18 +134,12 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
 
   local function get_directions(entity_position, entity_neighbours)
     local table_entry = 0
-    local directions_table = {}
-    --? Store the direction as the index in a table. This allows multiple references to the same direction, such as in the case of pipemod pipes.
     for _, neighbour_unit_number in pairs(entity_neighbours) do
-      --? Retreive cached data about neighbour
       local current_neighbour = read_entity_data[neighbour_unit_number]
       if current_neighbour then
-        directions_table[get_direction(entity_position, current_neighbour[1])] = true
+        local direction = get_direction(entity_position, current_neighbour[1])
+        table_entry = bor(table_entry, lshift(1, direction))
       end
-    end
-    --? Step over table and add together 2^direction to enter directional table for name concatenation to spawn correct marker
-    for directions, _ in pairs(directions_table) do
-      table_entry = table_entry + (2 ^ directions)
     end
     return table_entry
   end
@@ -217,9 +213,7 @@ function M.update_pipelayer_markers(player, editor_surface)
 
   --? Destroy any existing markers
   if next(pdata.current_pipelayer_marker_table) then
-    log("start destroy")
     destroy_markers(pdata.current_pipelayer_marker_table)
-    log("end destroy")
     pdata.current_pipelayer_marker_table = nil
   end
 
