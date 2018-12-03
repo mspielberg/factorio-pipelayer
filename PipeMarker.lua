@@ -76,12 +76,8 @@ end
 
 --? Destroy markers from player's global data table
 local function destroy_markers(markers)
-  if markers then
-    for _, entity in pairs(markers) do
-      if entity.valid then
-        entity.destroy()
-      end
-    end
+  for _, entity in pairs(markers) do
+    entity.destroy()
   end
 end
 
@@ -100,7 +96,6 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
 
   --? Assign working table references to global reference under player
   pdata.current_pipelayer_marker_table = all_markers
-  pdata.current_pipelayer_table = all_entities_marked
 
   --? Setting and cache create entity function
   local max_distance = settings.global['pipelayer-max-distance-checked'].value
@@ -187,7 +182,7 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
           local current_neighbour = read_entity_data[neighbour_unit_number]
           if current_neighbour then
             --? Ensure it's a valid name or type to draw dashes between. Don't draw dashes between "clamped" pipes (They are pipe to ground entities) and ensure we're not marking towards an already marked entity
-            if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not string.find(current_neighbour[4], '%-clamped%-') and not all_entities_marked[neighbour_unit_number] then
+            if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not current_neighbour[4]:find('%-clamped%-') and not all_entities_marked[neighbour_unit_number] then
               draw_dashes(current_entity[1], current_neighbour[1])
             end
           end
@@ -209,10 +204,9 @@ function M.update_pipelayer_markers(player, editor_surface)
 
   --? Get reference to current players data table in global
   local pdata = global.players[player_index]
-  pdata.current_pipelayer_marker_table = pdata.current_pipelayer_marker_table or {}
 
   --? Destroy any existing markers
-  if next(pdata.current_pipelayer_marker_table) then
+  if pdata.current_pipelayer_marker_table then
     destroy_markers(pdata.current_pipelayer_marker_table)
     pdata.current_pipelayer_marker_table = nil
   end
@@ -220,7 +214,7 @@ function M.update_pipelayer_markers(player, editor_surface)
   --? This is left in if you want to create a toggle
   --if not pdata.disable_auto_highlight then
     local cursor_item = player.cursor_stack.valid_for_read and player.cursor_stack.name
-    if cursor_item and cursor_item == 'pipelayer-connector' then
+    if cursor_item == 'pipelayer-connector' then
       highlight_pipelayer_surface(player_index, editor_surface)
     end
   --end
