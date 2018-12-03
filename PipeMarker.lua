@@ -4,83 +4,85 @@
 -- Concept designed and code written by TheStaplergun (staplergun on mod portal)
 -- Code revision and adaptation by Zeibach/Therax
 
+local M = {}
+
 --? Bit styled table. 2 ^ defines.direction is used for entry to the table. Only compatible with 4 way directions.
 local directional_table = {
-    [0] = '',
-    [1] = '-n',
-    [4] = '-e',
-    [5] = '-ne',
-    [16] = '-s',
-    [17] = '-ns',
-    [20] = '-se',
-    [21] = '-nse',
-    [64] = '-w',
-    [65] = '-nw',
-    [68] = '-ew',
-    [69] = '-new',
-    [80] = '-sw',
-    [81] = '-nsw',
-    [84] = '-sew',
-    [85] = '-nsew'
+  [0x00] = '',
+  [0x01] = '-n',
+  [0x04] = '-e',
+  [0x05] = '-ne',
+  [0x10] = '-s',
+  [0x11] = '-ns',
+  [0x14] = '-se',
+  [0x15] = '-nse',
+  [0x40] = '-w',
+  [0x41] = '-nw',
+  [0x44] = '-ew',
+  [0x45] = '-new',
+  [0x50] = '-sw',
+  [0x51] = '-nsw',
+  [0x54] = '-sew',
+  [0x55] = '-nsew'
 }
 
 --? Tables for read-limits
 local allowed_types = {
-    ['pipe'] = true,
-    ['pipe-to-ground'] = true,
-    ['storage-tank'] = true,
+  ['pipe'] = true,
+  ['pipe-to-ground'] = true,
+  ['storage-tank'] = true,
 }
 
 local not_allowed_names = {
-    ['factory-fluid-dummy-connector'] = true,
-    ['factory-fluid-dummy-connector-south'] = true,
-    ['offshore-pump-output'] = true
+  ['factory-fluid-dummy-connector'] = true,
+  ['factory-fluid-dummy-connector-south'] = true,
+  ['offshore-pump-output'] = true
 }
 
 --? Table for types and names to draw dashes between
 local draw_dashes_types = {
-    ['pipe-to-ground'] = true
+  ['pipe-to-ground'] = true
 }
 local draw_dashes_names = {
-    ['4-to-4-pipe'] = true
+  ['4-to-4-pipe'] = true
 }
 
 local function get_ew(delta_x)
-    return delta_x > 0 and defines.direction.west or defines.direction.east
+  return delta_x > 0 and defines.direction.west or defines.direction.east
 end
 
 local function get_ns(delta_y)
-    return delta_y > 0 and defines.direction.north or defines.direction.south
+  return delta_y > 0 and defines.direction.north or defines.direction.south
 end
 
 --? Gets fourway direction relation based on positions
+local abs = math.abs
 local function get_direction(entity_position, neighbour_position)
-    local abs = math.abs
-    local delta_x = entity_position.x - neighbour_position.x
-    local delta_y = entity_position.y - neighbour_position.y
-    if delta_x ~= 0 then
-        if delta_y == 0 then
-            return get_ew(delta_x)
-        else
-            local adx, ady = abs(delta_x), abs(delta_y)
-            if adx > ady then
-                return get_ew(delta_x)
-            else --? Exact diagonal relations get returned as a north/south relation.
-                return get_ns(delta_y)
-            end
-        end
-    else
-        return get_ns(delta_y)
+  local delta_x = entity_position.x - neighbour_position.x
+  local delta_y = entity_position.y - neighbour_position.y
+  if delta_x == 0 then
+    return get_ns(delta_y)
+  elseif delta_y == 0 then
+    return get_ew(delta_x)
+  else
+    local adx, ady = abs(delta_x), abs(delta_y)
+    if adx > ady then
+      return get_ew(delta_x)
+    else --? Exact diagonal relations get returned as a north/south relation.
+      return get_ns(delta_y)
     end
+  end
 end
 
 --? Destroy markers from player's global data table
 local function destroy_markers(markers)
-    if markers then
-        for _, entity in pairs(markers) do
-            entity.destroy()
-        end
+  if markers then
+    for _, entity in pairs(markers) do
+      if entity.valid then
+        entity.destroy()
+      end
     end
+  end
 end
 
 local function highlight_pipelayer_surface(player_index)
@@ -205,38 +207,31 @@ local function highlight_pipelayer_surface(player_index)
     end
 end
 
-local function get_pipelayer_pipes(event)
-    local player = game.players[event.player_index]
+function M.update_pipelayer_markers(player, editor_surface)
+  --? Build player indexed storage location for references in global
+  local player_index = player.index
+  global.players = global.players or {}
+  global.players[player_index] = global.players[player_index] or {}
 
-    --? Build player indexed storage location for references in global
-    global.players = global.players or {}
-    global.players[event.player_index] = global.players and global.players[event.player_index] or {}
+  --? Get reference to current players data table in global
+  local pdata = global.players[player_index]
+  pdata.current_pipelayer_marker_table = pdata.current_pipelayer_marker_table or {}
 
-    --? Get reference to current players data table in global
-    local pdata = global.players[event.player_index]
-    pdata.current_pipelayer_table = pdata.current_pipelayer_table or {}
-    pdata.current_pipelayer_marker_table = pdata.current_pipelayer_marker_table or {}
+  --? Destroy any existing markers
+  if next(pdata.current_pipelayer_marker_table) then
+    log("start destroy")
+    destroy_markers(pdata.current_pipelayer_marker_table)
+    log("end destroy")
+    pdata.current_pipelayer_marker_table = nil
+  end
 
-    --? This is left in if you want to create a toggle
-    --if not pdata.disable_auto_highlight then
-        local cursor_item = player.cursor_stack and player.cursor_stack.valid_for_read and player.cursor_stack.name
-        if cursor_item and cursor_item == 'pipelayer-connector' and player.surface.name ~= 'pipelayer' then
-            --? If for some reason the player gets a copy of the item in their hand and there's a set of markers already existent (The event double fires)
-            --? Delete the current markers and reconstruct them
-            if next(pdata.current_pipelayer_table) then
-                destroy_markers(pdata.current_pipelayer_marker_table)
-                pdata.current_pipelayer_table = nil
-                pdata.current_pipelayer_marker_table = nil
-            end
-            highlight_pipelayer_surface(event.player_index)
-        else
-            if next(pdata.current_pipelayer_table) then
-                destroy_markers(pdata.current_pipelayer_marker_table)
-                pdata.current_pipelayer_table = nil
-                pdata.current_pipelayer_marker_table = nil
-            end
-        end
-    --end
+  --? This is left in if you want to create a toggle
+  --if not pdata.disable_auto_highlight then
+    local cursor_item = player.cursor_stack.valid_for_read and player.cursor_stack.name
+    if cursor_item and cursor_item == 'pipelayer-connector' then
+      highlight_pipelayer_surface(player, editor_surface)
+    end
+  --end
 end
 
-script.on_event(defines.events.on_player_cursor_stack_changed, get_pipelayer_pipes)
+return M
