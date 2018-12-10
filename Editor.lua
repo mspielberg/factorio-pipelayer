@@ -634,12 +634,28 @@ function Editor:script_raised_built(event)
   end
 end
 
+---------------------------------------------------------------------------------------------------
+-- pipe marker rendering
+
 function Editor:on_player_cursor_stack_changed(event)
-  local player = game.players[event.player_index]
+  local player_index = event.player_index
+  local player = game.players[player_index]
   local editor_surface = self:get_editor_surface(player.surface)
-  if editor_surface then
-    PipeMarker.update_pipelayer_markers(player, editor_surface)
-  end
+  if not editor_surface then return end
+
+  PipeMarker.on_cursor_stack_changed(player_index, editor_surface)
+end
+
+function Editor:on_player_changed_position(event)
+  local player_index = event.player_index
+  local player = game.players[player_index]
+  local editor_surface = self:get_editor_surface(player.surface)
+  if not editor_surface then return end
+
+  local cursor_name = player.cursor_stack.valid_for_read and player.cursor_stack.name
+  if cursor_name ~= "pipelayer-connector" then return end
+
+  PipeMarker.on_player_changed_position(player_index, editor_surface)
 end
 
 return M

@@ -39,5 +39,5 @@ data:extend{
     maximum_value = 500,
     default_value = 80,
     order = 'a'
-},
+  },
 }

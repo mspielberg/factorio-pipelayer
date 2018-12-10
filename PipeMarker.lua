@@ -4,6 +4,8 @@
 -- Concept designed and code written by TheStaplergun (staplergun on mod portal)
 -- Code revision and adaptation by Zeibach/Therax
 
+local inspect = require "inspect"
+
 local M = {}
 
 --? Bit styled table. 2 ^ defines.direction is used for entry to the table. Only compatible with 4 way directions.
@@ -47,6 +49,43 @@ local draw_dashes_names = {
   ['4-to-4-pipe'] = true
 }
 
+-- Returns a list of bounding boxes within radius of position that are not in radius of old_position.
+-- Diagonal movement may result in two rects, one on the x axis and one on the y axis.
+local function delta_rects(position, old_position, radius)
+  local px = position.x
+  local py = position.y
+  local ox = px - old_position.x
+  local oy = py - old_position.y
+
+  local rects = {}
+
+  if ox > 0 then
+    rects[#rects+1] = {
+      left_top     = { x = px + radius - ox, y = py - radius },
+      right_bottom = { x = px + radius     , y = py + radius },
+    }
+  elseif ox < 0 then
+    rects[#rects+1] = {
+      left_top     = { x = px - radius     , y = py - radius },
+      right_bottom = { x = px - radius - ox, y = py + radius },
+    }
+  end
+
+  if oy > 0 then
+    rects[#rects+1] = {
+      left_top     = { x = px - radius, y = py + radius - oy },
+      right_bottom = { x = px + radius, y = py + radius      },
+    }
+  elseif oy < 0 then
+    rects[#rects+1] = {
+      left_top     = { x = px - radius, y = py - radius      },
+      right_bottom = { x = px + radius, y = py - radius - oy },
+    }
+  end
+
+  return rects
+end
+
 local function get_ew(delta_x)
   return delta_x > 0 and defines.direction.west or defines.direction.east
 end
@@ -83,26 +122,25 @@ end
 
 local bor = bit32.bor
 local lshift = bit32.lshift
-local function highlight_pipelayer_surface(player_index, editor_surface)
-
+local function highlight_pipelayer_surface(player_index, editor_surface, area)
   --? Get player and build player's global data table for markers
   local player = game.players[player_index]
   local pdata = global.players[player_index]
 
   --? Declare working tables
   local read_entity_data = {}
-  local all_entities_marked = {}
-  local all_markers = {}
 
   --? Assign working table references to global reference under player
-  pdata.current_pipelayer_marker_table = all_markers
+  pdata.unit_numbers_marked = pdata.unit_numbers_marked or {}
+  pdata.current_pipelayer_marker_table = pdata.current_pipelayer_marker_table or {}
+  local unit_numbers_marked = pdata.unit_numbers_marked
+  local all_markers = pdata.current_pipelayer_marker_table
 
   --? Setting and cache create entity function
-  local max_distance = settings.global['pipelayer-max-distance-checked'].value
   local create = player.surface.create_entity
 
   --? Variables
-  local markers_made = 0
+  local markers_made = #all_markers
 
   --? Draws marker at position based on connected directions
   local function draw_marker(position, directions)
@@ -141,40 +179,40 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
 
   --? Construct filter table fed to function below
   local filter = {
-    area = {{player.position.x - max_distance, player.position.y - max_distance}, {player.position.x + max_distance, player.position.y + max_distance}},
+    area = area,
     type = {'pipe-to-ground', 'pipe', 'storage-tank'},
     force = player.force
   }
 
   --? Get pipes within filter area and cache them
   for _, entity in pairs(editor_surface.find_entities_filtered(filter)) do
-    local entity_unit_number = entity.unit_number
-    local entity_position = entity.position
-    local entity_neighbours = entity.neighbours[1]
     local entity_type = entity.type
     local entity_name = entity.name
 
     --? Verify entity is allowed to be stored
     if allowed_types[entity_type] and not not_allowed_names[entity_name] then
+      local entity_unit_number = entity.unit_number
+      local entity_position = entity.position
+      local entity_neighbours = entity.neighbours[1]
       read_entity_data[entity_unit_number] = {
         entity_position,
         entity_neighbours,
         entity_type,
         entity_name
       }
-    end
 
-    --? Convert neighbour table to unit number references to gain access to already cached data above at later point
-    for neighbour_index_number, neighbour in pairs(entity_neighbours) do
-      local neighbour_unit_number = neighbour.unit_number
-      entity_neighbours[neighbour_index_number] = neighbour_unit_number
+      --? Convert neighbour table to unit number references to gain access to already cached data above at later point
+      for neighbour_index_number, neighbour in pairs(entity_neighbours) do
+        local neighbour_unit_number = neighbour.unit_number
+        entity_neighbours[neighbour_index_number] = neighbour_unit_number
+      end
     end
   end
 
   --? Step through all cached pipes
   for unit_number, current_entity in pairs(read_entity_data) do
     --? Ensure no double marking
-    if not all_entities_marked[unit_number] then
+    if not unit_numbers_marked[unit_number] then
       --? Draw dashed beam entity if pipe_to_ground
       if draw_dashes_types[current_entity[3]] or draw_dashes_names[current_entity[4]] then
         for _, neighbour_unit_number in pairs(current_entity[2]) do
@@ -182,7 +220,7 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
           local current_neighbour = read_entity_data[neighbour_unit_number]
           if current_neighbour then
             --? Ensure it's a valid name or type to draw dashes between. Don't draw dashes between "clamped" pipes (They are pipe to ground entities) and ensure we're not marking towards an already marked entity
-            if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not current_neighbour[4]:find('%-clamped%-') and not all_entities_marked[neighbour_unit_number] then
+            if (draw_dashes_types[current_neighbour[3]] or draw_dashes_names[current_neighbour[4]]) and not current_neighbour[4]:find('%-clamped%-') and not unit_numbers_marked[neighbour_unit_number] then
               draw_dashes(current_entity[1], current_neighbour[1])
             end
           end
@@ -191,33 +229,58 @@ local function highlight_pipelayer_surface(player_index, editor_surface)
       --? Draw a marker on the current entity with lines pointing towards each neighbour (Overlaps beam drawings without an issue)
       draw_marker(current_entity[1], get_directions(current_entity[1], current_entity[2]))
       --? Set current entity as marked
-      all_entities_marked[unit_number] = true
+      unit_numbers_marked[unit_number] = true
     end
   end
 end
 
-function M.update_pipelayer_markers(player, editor_surface)
-  --? Build player indexed storage location for references in global
-  local player_index = player.index
-  global.players = global.players or {}
+function M.on_cursor_stack_changed(player_index, editor_surface)
+  local player = game.players[player_index]
   global.players[player_index] = global.players[player_index] or {}
-
-  --? Get reference to current players data table in global
   local pdata = global.players[player_index]
 
-  --? Destroy any existing markers
-  if pdata.current_pipelayer_marker_table then
+  local cursor_item = player.cursor_stack.valid_for_read and player.cursor_stack.name
+  if cursor_item == 'pipelayer-connector' then
+    -- set up markers from scratch
+    local radius = settings.global["pipelayer-max-distance-checked"].value
+    local area = {
+      {player.position.x - radius, player.position.y - radius},
+      {player.position.x + radius, player.position.y + radius},
+    }
+    pdata.old_position = game.players[player_index].position
+    highlight_pipelayer_surface(player_index, editor_surface, area)
+  elseif pdata.current_pipelayer_marker_table then
     destroy_markers(pdata.current_pipelayer_marker_table)
     pdata.current_pipelayer_marker_table = nil
+    pdata.unit_numbers_marked = nil
+    pdata.old_position = nil
   end
+end
 
-  --? This is left in if you want to create a toggle
-  --if not pdata.disable_auto_highlight then
-    local cursor_item = player.cursor_stack.valid_for_read and player.cursor_stack.name
-    if cursor_item == 'pipelayer-connector' then
-      highlight_pipelayer_surface(player_index, editor_surface)
+local function chebyshev(p1, p2)
+  local dx = abs(p1.x - p2.x)
+  local dy = abs(p1.y - p2.y)
+  if dx > dy then return dx end
+  return dy
+end
+
+function M.on_player_changed_position(player_index, editor_surface)
+  local player = game.players[player_index]
+  global.players[player_index] = global.players[player_index] or {}
+  local pdata = global.players[player_index]
+
+  local old_position = pdata.old_position
+  local position = player.position
+  if old_position and chebyshev(position, old_position) > 5 then
+    local radius = settings.global["pipelayer-max-distance-checked"].value
+
+    -- draw markers in new areas
+    local rects_to_mark = delta_rects(position, old_position, radius)
+    for _, rect in ipairs(rects_to_mark) do
+      highlight_pipelayer_surface(player_index, editor_surface, rect)
     end
-  --end
+    pdata.old_position = position
+  end
 end
 
 return M
