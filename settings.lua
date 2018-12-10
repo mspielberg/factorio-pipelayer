@@ -32,12 +32,19 @@ data:extend{
   },
 
   {
-    type = 'int-setting',
-    name = 'pipelayer-max-distance-checked',
-    setting_type = 'runtime-global',
+    type = "int-setting",
+    name = "pipelayer-max-distance-checked",
+    setting_type = "runtime-global",
     minimum_value = 50,
     maximum_value = 500,
     default_value = 80,
-    order = 'a'
+    order = "a"
+  },
+
+  {
+    type = "bool-setting",
+    name = "pipelayer-show-network-ids",
+    setting_type = "runtime-global",
+    default_value = false,
   },
 }
