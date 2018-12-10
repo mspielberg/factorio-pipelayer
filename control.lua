@@ -7,6 +7,7 @@ require "PipeMarker"
 local editor
 
 local function on_init()
+  global.players = {}
   global.editor = Editor.new()
   editor = global.editor
   Network.on_init()

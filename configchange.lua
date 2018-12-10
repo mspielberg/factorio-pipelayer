@@ -31,4 +31,12 @@ add_migration{
   end,
 }
 
+add_migration{
+  name = "v0_2_1_add_pipemarker_global",
+  version = {0,2,1},
+  task = function()
+    global.players = global.players or {}
+  end,
+}
+
 return M
