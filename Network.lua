@@ -111,6 +111,32 @@ function Network:destroy()
   end
 end
 
+local function create_marker(surface, position, id)
+  local marker = surface.create_entity{
+    name = "flying-text",
+    position = position,
+    text = tostring(id),
+  }
+  marker.active = false
+end
+
+function Network:create_or_destroy_network_markers()
+  local _, pipe = next(self.pipes)
+  if not pipe then return end
+  local surface = pipe.surface
+  local network_id = self.id
+
+  if settings.global["pipelayer-show-network-ids"].value then
+    for _, pipe in pairs(self.pipes) do
+      create_marker(surface, pipe.position, network_id)
+    end
+  else
+    for _, entity in ipairs(surface.find_entities_filtered{name = "flying-text"}) do
+      entity.destroy()
+    end
+  end
+end
+
 function Network:is_singleton()
   local n = next(self.pipes)
   local n2 = next(self.pipes, n)
@@ -156,7 +182,16 @@ function Network:add_underground_pipe(entity)
   for _, neighbor in ipairs(entity.neighbours[1]) do
     self.graph:add(unit_number, neighbor.unit_number)
   end
+
   fill_pipe(entity, self.fluid_name)
+
+  if settings.global["pipelayer-show-network-ids"].value then
+    local position = entity.position
+    local old_marker = surface.find_entity("flying-text", position)
+    if old_marker then old_marker.destroy() end
+
+    create_marker(surface, position, self.id)
+  end
 end
 
 function Network:remove_underground_pipe(entity)
@@ -167,6 +202,9 @@ function Network:remove_underground_pipe(entity)
   pipes[unit_number] = nil
   self:remove_connector_by_below_unit_number(unit_number)
   network_for_entity[unit_number] = nil
+
+  local old_marker = surface.find_entity("flying-text", entity.position)
+  if old_marker then old_marker.destroy() end
 
   if #entity.neighbours[1] > 1 then
     -- multiple connections for this pipe, so this may split the network into multiple new networks
@@ -383,6 +421,10 @@ function Network.on_runtime_mod_setting_changed(event)
     Connector.on_runtime_mod_setting_changed(event)
   elseif name == "pipelayer-update-period" then
     set_update_periods()
+  elseif name == "pipelayer-show-network-ids" then
+    for _, network in pairs(all_networks) do
+      network:create_or_destroy_network_markers()
+    end
   end
 end
 
