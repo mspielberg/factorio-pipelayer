@@ -10,8 +10,6 @@ if Constants.DEBUG_ENABLED then
   debug = function(x) log(inspect(x)) end
 end
 
-local SURFACE_NAME = Constants.SURFACE_NAME
-
 local active_update_period = 1
 local inactive_update_period
 local no_fluid_update_period
@@ -149,7 +147,8 @@ function Network:remove_connector_by_below_unit_number(below_unit_number)
 end
 
 function Network:add_underground_pipe(entity)
-  assert(entity.surface.name == SURFACE_NAME)
+  local surface = entity.surface
+
   local unit_number = entity.unit_number
   network_for_entity[unit_number] = self
   self.pipes[unit_number] = entity
@@ -161,7 +160,7 @@ function Network:add_underground_pipe(entity)
 end
 
 function Network:remove_underground_pipe(entity)
-  assert(entity.surface.name == SURFACE_NAME)
+  local surface = entity.surface
   local connector_for_below_unit_number = Connector.for_below_unit_number
   local unit_number = entity.unit_number
   local pipes = self.pipes
@@ -275,7 +274,8 @@ function Network:set_fluid(fluid_name)
   end
 
   if not fluid_for_filling then
-    local surface = game.surfaces[SURFACE_NAME]
+    local _, pipe = next(self.pipes)
+    local surface = pipe.surface
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
       local counterpart = surface.find_entity("pipelayer-connector", connector.entity.position)
