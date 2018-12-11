@@ -4,8 +4,8 @@ local inspect = require "inspect"
 local Queue = require "lualib.Queue"
 local Scheduler = require "lualib.Scheduler"
 
-local debug = function() end
--- debug = function(x) log(inspect(x)) end
+local debugp = function() end
+-- debugp = function(x) log(inspect(x)) end
 
 local active_update_period = 1
 local inactive_update_period
@@ -25,23 +25,27 @@ local function set_update_periods()
   local base_update_period = settings.global["pipelayer-update-period"].value
   inactive_update_period = base_update_period
   no_fluid_update_period = base_update_period * 5
-  debug("setting update period to "..base_update_period.." ticks.")
+  debugp("setting update period to "..base_update_period.." ticks.")
 end
 
 local Network = {}
 
 local all_networks
+local absorb_queue
 local network_for_entity = {}
 
 function Network.on_init()
   global.all_networks = {}
   global.network_iter = nil
+  global.absorb_queue = Queue.new()
   Network.on_load()
 end
 
 function Network.on_load()
   set_update_periods()
   all_networks = global.all_networks
+  absorb_queue = Queue.restore(global.absorb_queue)
+  Scheduler.schedule(0, Network.process_absorb_queue)
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
     for unit_number, pipe in pairs(network.pipes) do
@@ -50,9 +54,6 @@ function Network.on_load()
       end
     end
     ConnectorSet.restore(network.connectors)
-    if network.absorb_queue then
-      Queue.restore(network.absorb_queue)
-    end
     Scheduler.schedule(network.next_tick or 0, function(tick) network:update(tick) end)
   end
 end
@@ -65,7 +66,6 @@ end
       ...
     },
     connectors = ConnectorSet(),
-    absorb_queue = Queue(),
   }
 ]]
 function Network.new()
@@ -76,13 +76,12 @@ function Network.new()
     fluid_name = nil,
     pipes = {},
     connectors = ConnectorSet.new(),
-    absorb_queue = Queue.new(),
     next_tick = 0,
   }
   setmetatable(self, {__index = Network})
   Scheduler.schedule(self.next_tick, function(tick) self:update(tick) end)
   all_networks[network_id] = self
-  debug("created new network "..network_id)
+  debugp("created new network "..network_id)
   return self
 end
 
@@ -95,7 +94,7 @@ function Network.for_entity(entity)
 end
 
 function Network:destroy()
-  debug("destroyed network "..self.id)
+  debugp("destroyed network "..self.id)
   all_networks[self.id] = nil
   if global.network_iter == self.id then
     global.network_iter = nil
@@ -132,10 +131,6 @@ function Network:is_singleton()
   local n = next(self.pipes)
   local n2 = next(self.pipes, n)
   return n and not n2
-end
-
-function Network:absorb_from(starting_entity)
-  self.absorb_queue:append(starting_entity)
 end
 
 function Network:add_connector_entity(above, below_unit_number)
@@ -178,7 +173,11 @@ local function break_to_fragments(self, neighbours)
     local new_network = Network.new()
     self:remove_underground_pipe(neighbour, true)
     new_network:add_underground_pipe(neighbour)
-    new_network:absorb_from(neighbour)
+    local connector = Connector.for_below_unit_number(neighbour.unit_number)
+    if connector then
+      new_network:add_connector(connector)
+    end
+    Network.absorb_from(neighbour)
   end
 end
 
@@ -259,7 +258,7 @@ function Network:foreach_underground_entity(callback)
 end
 
 function Network:set_fluid(fluid_name)
-  debug("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
+  debugp("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   local fluid_for_filling
   if fluid_name == "PIPELAYER-CONFLICT" then
@@ -319,7 +318,7 @@ end
 
 function Network:infer_fluid()
   local fluid_name = self:infer_fluid_from_connectors()
-  -- debug("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
+  -- debugp("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
   if fluid_name ~= self.fluid_name then
     self:set_fluid(fluid_name)
     return true
@@ -329,45 +328,8 @@ end
 
 function Network:reschedule(next_tick)
   self.next_tick = next_tick
-  --debug{msg="reschedule", next_tick=next_tick, network_id=self.id}
+  --debugp{msg="reschedule", next_tick=next_tick, network_id=self.id}
   Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
-end
-
-local function absorb_one(self, entity)
-  local connector
-  if entity.name == "pipelayer-connector" then
-    connector = Connector.for_below_unit_number(entity.unit_number)
-  end
-
-  local current_network = Network.for_entity(entity)
-  if current_network == self then return end
-  if current_network.fluid_name ~= self.fluid_name then
-    self.fluid_name = nil
-  end
-
-  current_network:remove_underground_pipe(entity, true)
-  self:add_underground_pipe(entity)
-  if connector then
-    self:add_connector(connector)
-  end
-end
-
-local function try_to_absorb(self)
-  local absorb_queue = self.absorb_queue
-  for i=1,10 do
-    local next_entity = absorb_queue:dequeue()
-    if not next_entity then return nil end
-    if next_entity.valid then
-      absorb_one(self, next_entity)
-      for _, neighbour in pairs(next_entity.neighbours[1]) do
-        local neighbour_network = Network.for_entity(neighbour)
-        if neighbour_network.id < self.id then
-          absorb_queue:append(neighbour)
-        end
-      end
-    end
-  end
-  return 1
 end
 
 local function try_to_transfer(self)
@@ -399,13 +361,81 @@ local function try_to_transfer(self)
 end
 
 function Network:update(tick)
-  local next_absorb_interval = try_to_absorb(self)
   local next_transfer_interval = try_to_transfer(self)
-  if next_absorb_interval then
-    self:reschedule(tick + next_absorb_interval)
-  elseif next_transfer_interval then
+  if next_transfer_interval then
     self:reschedule(tick + next_transfer_interval)
   end
+end
+
+--- absorbs a single entity in the specified network
+function Network:absorb_one(entity)
+  local current_network = Network.for_entity(entity)
+  if current_network then
+    current_network:remove_underground_pipe(entity, true)
+    if current_network.fluid_name ~= self.fluid_name then
+      self.fluid_name = nil
+    end
+  end
+
+  self:add_underground_pipe(entity)
+  if entity.name == "pipelayer-connector" then
+    connector = Connector.for_below_unit_number(entity.unit_number)
+    if connector then
+      self:add_connector(connector)
+    end
+  end
+end
+
+--- absorbs all entities into the network with highest index
+local function absorb_entities(entities)
+  local network_ids = {}
+  local highest_network
+  local highest_network_id = 0
+  for i=1,#entities do
+    local entity = entities[i]
+    local network = Network.for_entity(entity)
+    if network then
+      local network_id = network.id
+      network_ids[i] = network_id
+      if network_id > highest_network_id then
+        highest_network = network
+        highest_network_id = network_id
+      end
+    end
+  end
+
+  for i=1,#entities do
+    local entity = entities[i]
+    local old_network_id = network_ids[i]
+    if not old_network_id or old_network_id < highest_network_id then
+      highest_network:absorb_one(entity)
+      absorb_queue:append(entity)
+    end
+  end
+end
+
+local last_processed_tick
+function Network.process_absorb_queue(tick)
+  if tick == last_processed_tick then return end
+  last_processed_tick = tick
+
+  for i=1,10 do
+    local next_entity = absorb_queue:dequeue()
+    if not next_entity then
+      return
+    end
+    if next_entity.valid then
+      local neighbours = next_entity.neighbours[1]
+      neighbours[#neighbours+1] = next_entity
+      absorb_entities(neighbours)
+    end
+  end
+  Scheduler.schedule(tick + 1, Network.process_absorb_queue)
+end
+
+function Network.absorb_from(entity)
+  absorb_queue:append(entity)
+  Network.process_absorb_queue(game.tick)
 end
 
 function Network.update_all(event)

@@ -29,8 +29,8 @@ function M.instance()
   end
 end
 
-local debug = function() end
--- debug = log
+local debugp = function() end
+-- debugp = log
 
 local function nonproxy_name(name)
   return name:match("^pipelayer%-bpproxy%-(.*)$")
@@ -118,7 +118,7 @@ local function connect_underground_pipe(entity)
 
   main_network:add_underground_pipe(entity)
   if found_other_networks then
-    main_network:absorb_from(entity)
+    Network.absorb_from(entity)
   end
   return main_network
 end
@@ -636,12 +636,15 @@ function Editor:script_raised_built(event)
     local entity = event.created_entity
     local old_unit_number = event.replaced_entity_unit_number
     if entity and old_unit_number then
-      local network = Network.for_unit_number(old_unit_number)
+      local old_network = Network.for_unit_number(old_unit_number)
+      if old_network then
+        old_network:underground_pipe_replaced(old_unit_number, entity)
+      end
+
       local main_network, other_networks = newest_connected_network(entity)
-      network:underground_pipe_replaced(old_unit_number, entity)
       main_network:add_underground_pipe(entity)
       if main_network ~= network then
-        main_network:absorb_from(entity)
+        Network.absorb_from(entity)
       end
     end
   end
