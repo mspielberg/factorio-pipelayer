@@ -1,14 +1,11 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
-local Constants = require "Constants"
 local inspect = require "inspect"
 local Graph = require "lualib.Graph"
 local Scheduler = require "lualib.Scheduler"
 
 local debug = function() end
-if Constants.DEBUG_ENABLED then
-  debug = function(x) log(inspect(x)) end
-end
+-- debug = function(x) log(inspect(x)) end
 
 local active_update_period = 1
 local inactive_update_period
@@ -96,14 +93,6 @@ function Network.for_entity(entity)
 end
 
 function Network:destroy()
-  if Constants.DEBUG_ENABLED then
-    for pipe, id in pairs(network_for_entity) do
-      if id == self.id then
-        error("Network destroyed while pipe reference exists for pipe "..pipe.unit_number)
-      end
-    end
-  end
-
   debug("destroyed network "..self.id)
   all_networks[self.id] = nil
   if global.network_iter == self.id then
@@ -329,7 +318,6 @@ function Network:infer_fluid_from_connectors()
   local inferred_fluid
   local conflict
   foreach_connector(self, function(connector)
-    -- debug("examining connector "..serpent.line(connector))
     local connector_fluidbox = connector.entity.fluidbox[1]
     if connector_fluidbox then
       if inferred_fluid then
@@ -367,7 +355,7 @@ end
 
 function Network:reschedule(next_tick)
   self.next_tick = next_tick
-  debug{msg="reschedule", next_tick=next_tick, network_id=self.id}
+  --debug{msg="reschedule", next_tick=next_tick, network_id=self.id}
   Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
 end
 
@@ -384,7 +372,6 @@ function Network:update(tick)
 
   local next_input_connector = self.connectors:next_input()
   local next_output_connector = self.connectors:next_output()
-  -- debug{input=next_input_connector, output=next_output_connector}
   if not next_input_connector or not next_output_connector then
     debug("network "..self.id.." is not ready for transfer")
     -- disabled do judge performance cost
@@ -394,12 +381,6 @@ function Network:update(tick)
   end
 
   if self:can_transfer(next_input_connector, next_output_connector) then
-    debug{
-      network=self.id,
-      fluid=self.fluid_name,
-      from=next_input_connector.entity.position,
-      to=next_output_connector.entity.position
-    }
     next_input_connector:transfer_to(self.fluid_name, next_output_connector)
   else
     if next_input_connector:is_conflicting(self.fluid_name)

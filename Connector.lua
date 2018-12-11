@@ -1,11 +1,10 @@
-local Constants = require "Constants"
 local PipeConnections = require "lualib.PipeConnections"
 
 local M = {}
 
 local Connector = {}
 
-local CAPACITY = Constants.CONNECTOR_CAPACITY
+local CAPACITY = settings.startup["pipelayer-connector-capacity"].value
 
 local transfer_threshold = settings.global["pipelayer-transfer-threshold"].value
 

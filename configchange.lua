@@ -1,4 +1,3 @@
-
 local Editor = require "Editor"
 local version = require "lualib.version"
 
