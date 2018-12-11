@@ -1,7 +1,7 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
 local inspect = require "inspect"
-local Graph = require "lualib.Graph"
+local Queue = require "lualib.Queue"
 local Scheduler = require "lualib.Scheduler"
 
 local debug = function() end
@@ -44,13 +44,15 @@ function Network.on_load()
   all_networks = global.all_networks
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
-    Graph.restore(network.graph)
     for unit_number, pipe in pairs(network.pipes) do
       if pipe.valid then
         network_for_entity[unit_number] = network
       end
     end
     ConnectorSet.restore(network.connectors)
+    if network.absorb_queue then
+      Queue.restore(network.absorb_queue)
+    end
     Scheduler.schedule(network.next_tick or 0, function(tick) network:update(tick) end)
   end
 end
@@ -58,12 +60,12 @@ end
 --[[
   {
     fluid_name = "water",
-    Graph = Graph(),
     pipes = {
       [unit_number] = pipe_entity,
       ...
     },
-    connectors = ConnectorSet()
+    connectors = ConnectorSet(),
+    absorb_queue = Queue(),
   }
 ]]
 function Network.new()
@@ -72,9 +74,9 @@ function Network.new()
   local self = {
     id = network_id,
     fluid_name = nil,
-    graph = Graph.new(),
     pipes = {},
     connectors = ConnectorSet.new(),
+    absorb_queue = Queue.new(),
     next_tick = 0,
   }
   setmetatable(self, {__index = Network})
@@ -132,17 +134,8 @@ function Network:is_singleton()
   return n and not n2
 end
 
-function Network:absorb(other_network)
-  for _, entity in pairs(other_network.pipes) do
-    self:add_underground_pipe(entity)
-  end
-  for connector in other_network.connectors:all_connectors() do
-    self:add_connector(connector)
-  end
-  if self.fluid_name ~= other_network.fluid_name then
-    self:set_fluid(nil)
-  end
-  other_network:destroy()
+function Network:absorb_from(starting_entity)
+  self.absorb_queue:append(starting_entity)
 end
 
 function Network:add_connector_entity(above, below_unit_number)
@@ -167,10 +160,6 @@ function Network:add_underground_pipe(entity)
   local unit_number = entity.unit_number
   network_for_entity[unit_number] = self
   self.pipes[unit_number] = entity
-  self.graph:add(unit_number)
-  for _, neighbor in ipairs(entity.neighbours[1]) do
-    self.graph:add(unit_number, neighbor.unit_number)
-  end
 
   fill_pipe(entity, self.fluid_name)
 
@@ -183,7 +172,17 @@ function Network:add_underground_pipe(entity)
   end
 end
 
-function Network:remove_underground_pipe(entity)
+local function break_to_fragments(self, neighbours)
+  for i=2,#neighbours do
+    local neighbour = neighbours[i]
+    local new_network = Network.new()
+    self:remove_underground_pipe(neighbour, true)
+    new_network:add_underground_pipe(neighbour)
+    new_network:absorb_from(neighbour)
+  end
+end
+
+function Network:remove_underground_pipe(entity, by_absorption)
   local surface = entity.surface
   local connector_for_below_unit_number = Connector.for_below_unit_number
   local unit_number = entity.unit_number
@@ -195,46 +194,21 @@ function Network:remove_underground_pipe(entity)
   local old_marker = surface.find_entity("flying-text", entity.position)
   if old_marker then old_marker.destroy() end
 
-  if #entity.neighbours[1] > 1 then
-    -- multiple connections for this pipe, so this may split the network into multiple new networks
-    local fragments = self.graph:removal_fragments(unit_number)
-    for i=2,#fragments do
-      local fragment = fragments[i]
-      local split_network = Network.new()
-      for fragment_pipe_unit_number in pairs(fragment) do
-        split_network:add_underground_pipe(pipes[fragment_pipe_unit_number])
-        local connector = connector_for_below_unit_number(fragment_pipe_unit_number)
-        if connector then
-          split_network:add_connector(connector)
-          self.connectors:remove(connector)
-        end
-        pipes[fragment_pipe_unit_number] = nil
-        self.graph:remove(fragment_pipe_unit_number)
-      end
-      split_network.graph:remove(unit_number)
-    end
+  local neighbours = entity.neighbours[1]
+  if not by_absorption and #neighbours > 1 then
+    break_to_fragments(self, neighbours)
   end
 
-  self.graph:remove(unit_number)
   if not next(pipes) then
     self:destroy()
   end
 end
 
-function Network:replace_underground_pipe(new_entity, old_unit_number)
+function Network:underground_pipe_replaced(old_unit_number, new_entity)
   self.pipes[old_unit_number] = nil
   network_for_entity[old_unit_number] = nil
-  self.graph:remove(old_unit_number)
-
-  self:add_underground_pipe(new_entity)
-
-  local neighbors = new_entity.neighbours[1]
-  for _, neighbor in ipairs(neighbors) do
-    local neighbor_network = Network.for_entity(neighbor)
-    if neighbor_network ~= self then
-      self:absorb(neighbor_network)
-    end
-  end
+  local old_marker = new_entity.surface.find_entity("flying-text", new_entity.position)
+  if old_marker then old_marker.destroy() end
 end
 
 function Network:set_connector_mode(entity, mode)
@@ -359,25 +333,57 @@ function Network:reschedule(next_tick)
   Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
 end
 
-function Network:update(tick)
-  if not all_networks[self.id] then return end
+local function absorb_one(self, entity)
+  local connector
+  if entity.name == "pipelayer-connector" then
+    connector = Connector.for_below_unit_number(entity.unit_number)
+  end
+
+  local current_network = Network.for_entity(entity)
+  if current_network == self then return end
+  if current_network.fluid_name ~= self.fluid_name then
+    self.fluid_name = nil
+  end
+
+  current_network:remove_underground_pipe(entity, true)
+  self:add_underground_pipe(entity)
+  if connector then
+    self:add_connector(connector)
+  end
+end
+
+local function try_to_absorb(self)
+  local absorb_queue = self.absorb_queue
+  for i=1,10 do
+    local next_entity = absorb_queue:dequeue()
+    if not next_entity then return nil end
+    if next_entity.valid then
+      absorb_one(self, next_entity)
+      for _, neighbour in pairs(next_entity.neighbours[1]) do
+        local neighbour_network = Network.for_entity(neighbour)
+        if neighbour_network.id < self.id then
+          absorb_queue:append(neighbour)
+        end
+      end
+    end
+  end
+  return 1
+end
+
+local function try_to_transfer(self)
+  if not all_networks[self.id] then return nil end
 
   if not self.fluid_name or self.fluid_name == "PIPELAYER-CONFLICT" then
     local success = self:infer_fluid()
     if not success then
-      self:reschedule(tick + no_fluid_update_period)
-      return
+      return no_fluid_update_period
     end
   end
 
   local next_input_connector = self.connectors:next_input()
   local next_output_connector = self.connectors:next_output()
   if not next_input_connector or not next_output_connector then
-    debug("network "..self.id.." is not ready for transfer")
-    -- disabled do judge performance cost
-    --self:infer_fluid()
-    self:reschedule(tick + inactive_update_period)
-    return
+    return inactive_update_period
   end
 
   if self:can_transfer(next_input_connector, next_output_connector) then
@@ -389,7 +395,17 @@ function Network:update(tick)
     end
   end
 
-  self:reschedule(tick + active_update_period)
+  return active_update_period
+end
+
+function Network:update(tick)
+  local next_absorb_interval = try_to_absorb(self)
+  local next_transfer_interval = try_to_transfer(self)
+  if next_absorb_interval then
+    self:reschedule(tick + next_absorb_interval)
+  elseif next_transfer_interval then
+    self:reschedule(tick + next_transfer_interval)
+  end
 end
 
 function Network.update_all(event)

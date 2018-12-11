@@ -1,4 +1,5 @@
 local Editor = require "Editor"
+local Queue = require "lualib.Queue"
 local version = require "lualib.version"
 
 local M = {}
@@ -35,6 +36,17 @@ add_migration{
   version = {0,2,1},
   task = function()
     global.players = global.players or {}
+  end,
+}
+
+add_migration{
+  name = "v0_2_1_add_network_absorb_work_queue",
+  version = {0,2,1},
+  task = function()
+    for _, network in pairs(global.all_networks) do
+      network.absorb_queue = Queue.new()
+      network.graph = nil
+    end
   end,
 }
 

@@ -87,35 +87,43 @@ local function set_to_list(set)
   return out
 end
 
-local function connected_networks(entity)
-  local out = {}
-  for _, neighbor in ipairs(entity.neighbours[1]) do
-    local neighbor_network = Network.for_entity(neighbor)
-    out[neighbor_network] = true
+--- returns the network connected to entity with the highest ID, and true if any other networks were found
+local function newest_connected_network(entity)
+  local neighbours = entity.neighbours[1]
+  local network_ids = {}
+  local highest_network_id = 0
+  local highest_network
+
+  for _, neighbour in ipairs(neighbours) do
+    local network = Network.for_entity(neighbour)
+    local network_id = network.id
+    network_ids[network_id] = true
+    if network_id > highest_network_id then
+      highest_network_id = network_id
+      highest_network = network
+    end
   end
-  return set_to_list(out)
+
+  network_ids[highest_network_id] = nil
+
+  return highest_network, next(network_ids) ~= nil
 end
 
- function connect_underground_pipe(entity)
+local function connect_underground_pipe(entity)
   entity.active = false
-  local networks = connected_networks(entity)
-  if not next(networks) then
-    local network = Network:new()
-    network:add_underground_pipe(entity)
-    return network
+  local main_network, found_other_networks = newest_connected_network(entity)
+  if not main_network then
+    main_network = Network.new()
   end
 
-  local main_network = networks[1]
   main_network:add_underground_pipe(entity)
-  for i=2,#networks do
-    local to_absorb = networks[i]
-    debug("absorbing network "..to_absorb.id.." into network "..main_network.id)
-    main_network:absorb(to_absorb)
+  if found_other_networks then
+    main_network:absorb_from(entity)
   end
   return main_network
 end
 
-function disconnect_underground_pipe(entity)
+local function disconnect_underground_pipe(entity)
   local network = Network.for_entity(entity)
   if network then
     network:remove_underground_pipe(entity)
@@ -629,7 +637,12 @@ function Editor:script_raised_built(event)
     local old_unit_number = event.replaced_entity_unit_number
     if entity and old_unit_number then
       local network = Network.for_unit_number(old_unit_number)
-      network:replace_underground_pipe(entity, old_unit_number)
+      local main_network, other_networks = newest_connected_network(entity)
+      network:underground_pipe_replaced(old_unit_number, entity)
+      main_network:add_underground_pipe(entity)
+      if main_network ~= network then
+        main_network:absorb_from(entity)
+      end
     end
   end
 end
