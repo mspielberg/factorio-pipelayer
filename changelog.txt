@@ -1,5 +1,6 @@
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
-Date: 10.12.2018
+Date: 16.12.2018
   Changes:
     - Pipe network membership is recalculated over multiple ticks, eliminating freezing when modifying very large networks.
   Compatibility:
@@ -8,6 +9,7 @@ Date: 10.12.2018
     - New debug option to show network IDs in underground view.
     - Underground pipe indicators are now extended as the player walks around the map.
     - Clarify console message when trying to build a connector on a surface where they are not allowed.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 02.12.2018
   Features:
