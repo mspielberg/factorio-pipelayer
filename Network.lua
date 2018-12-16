@@ -44,7 +44,9 @@ end
 function Network.on_load()
   set_update_periods()
   all_networks = global.all_networks
-  absorb_queue = Queue.restore(global.absorb_queue)
+  if global.absorb_queue then
+    absorb_queue = Queue.restore(global.absorb_queue)
+  end
   Scheduler.schedule(0, Network.process_absorb_queue)
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
