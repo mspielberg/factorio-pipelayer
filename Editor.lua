@@ -30,7 +30,7 @@ function M.instance()
 end
 
 local debugp = function() end
--- debugp = log
+-- debugp = function(...) log(inspect(...)) end
 
 local function nonproxy_name(name)
   return name:match("^pipelayer%-bpproxy%-(.*)$")
@@ -109,14 +109,14 @@ local function newest_connected_network(entity)
   return highest_network, next(network_ids) ~= nil
 end
 
-local function connect_underground_pipe(entity)
+local function connect_underground_pipe(entity, aboveground_connector_entity)
   entity.active = false
   local main_network, found_other_networks = newest_connected_network(entity)
   if not main_network then
     main_network = Network.new()
   end
 
-  main_network:add_underground_pipe(entity)
+  main_network:add_underground_pipe(entity, aboveground_connector_entity)
   if found_other_networks then
     Network.absorb_from(entity)
   end
@@ -174,7 +174,6 @@ local function on_built_aboveground_connector(self, creator, entity, stack)
     local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
     local network = connect_underground_pipe(underground_connector)
-    network:add_connector_entity(entity, underground_connector.unit_number)
     if is_output then
       network:set_connector_mode(entity, "output")
     end
@@ -455,21 +454,19 @@ function Editor:on_player_rotated_entity(event)
   local entity = event.entity
   local surface = entity.surface
   if not self:is_editor_surface(surface) then return end
+
   local aboveground_surface = self:aboveground_surface_for_editor_surface(surface)
-  local surface_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
   local old_network = Network.for_entity(entity)
-  local new_networks = connected_networks(entity)
-  if old_network:is_singleton() and not next(new_networks) then
+  local main_network, found_other_networks = newest_connected_network(entity)
+  debugp(inspect{old_network=old_network,main_network=main_network})
+  if old_network:is_singleton() and not main_network then
     return
   end
-  if surface_connector then
-    old_network:remove_connector_by_below_unit_number(entity.unit_number)
-  end
+
   old_network:remove_underground_pipe(entity)
-  local new_network = connect_underground_pipe(entity)
-  if surface_connector then
-    new_network:add_connector_entity(surface_connector, entity.unit_number)
-  end
+
+  local surface_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
+  local new_network = connect_underground_pipe(entity, surface_connector)
 end
 
 function Editor:on_entity_died(event)
@@ -629,28 +626,54 @@ function Editor:on_player_setup_blueprint(event)
 end
 
 ---------------------------------------------------------------------------------------------------
--- PickerPipeTools compatibility
+-- other mod compatibility
+
+local function to_set(t)
+  local out = {}
+  for _, elem in ipairs(t) do
+    out[elem] = true
+  end
+  return out
+end
+
+local function set_diff(s1, s2)
+  local added = {}
+  local removed = {}
+  for e in pairs(s1) do
+    if not s2[e] then
+      removed[e] = true
+    end
+  end
+  for e in pairs(s2) do
+    if not s1[e] then
+      added[e] = true
+    end
+  end
+  return added, removed
+end
+
+local old_neighbours
+function Editor:script_raised_destroy(event)
+  entity = event.entity
+  if not entity then return end
+  if not self:is_editor_surface(entity.surface) then return end
+  if entity.type == "pipe-to-ground" then
+    old_neighbours = to_set(entity.neighbours[1] or {})
+  end
+end
 
 function Editor:script_raised_built(event)
   local entity = event.created_entity
   if not entity then return end
+  local type = entity.type
   if not self:is_editor_surface(entity.surface) then return end
 
-  local old_unit_number = event.replaced_entity_unit_number
-  if not old_unit_number then return end
+  local replaced_entity_unit_number = event.replaced_entity_unit_number
 
-  local old_network = Network.for_unit_number(old_unit_number)
-  if old_network then
-    old_network:underground_pipe_replaced(old_unit_number, entity)
-  end
-
-  local main_network, other_networks = newest_connected_network(entity)
-  if main_network then
-    main_network:add_underground_pipe(entity)
-    if main_network ~= network then
-      Network.absorb_from(entity)
-    end
-  end
+  local new_neighbours = to_set(entity.neighbours[1] or {})
+  local added, removed = set_diff(old_neighbours, new_neighbours)
+  local network = Network.for_unit_number(replaced_entity_unit_number)
+  network:underground_pipe_replaced(replaced_entity_unit_number, entity, added, removed)
 end
 
 ---------------------------------------------------------------------------------------------------

@@ -135,11 +135,6 @@ function Network:is_singleton()
   return n and not n2
 end
 
-function Network:add_connector_entity(above, below_unit_number)
-  local connector = Connector.new(above, below_unit_number)
-  self:add_connector(connector)
-end
-
 function Network:add_connector(connector)
   self.connectors:add(connector)
 end
@@ -151,35 +146,47 @@ function Network:remove_connector_by_below_unit_number(below_unit_number)
   end
 end
 
-function Network:add_underground_pipe(entity)
-  local surface = entity.surface
+function Network:add_underground_pipe(underground_pipe, aboveground_connector_entity)
+  local surface = underground_pipe.surface
 
-  local unit_number = entity.unit_number
+  local unit_number = underground_pipe.unit_number
   network_for_entity[unit_number] = self
-  self.pipes[unit_number] = entity
+  self.pipes[unit_number] = underground_pipe
 
-  fill_pipe(entity, self.fluid_name)
+  fill_pipe(underground_pipe, self.fluid_name)
+
+  if Connector.for_below_unit_number(unit_number) then
+    self:add_connector(connector)
+  elseif aboveground_connector_entity then
+    local connector = Connector.for_entity(aboveground_connector_entity)
+    if not connector then
+      connector = Connector.new(aboveground_connector_entity, below_unit_number)
+    end
+    self:add_connector(connector)
+  end
 
   if settings.global["pipelayer-show-network-ids"].value then
-    local position = entity.position
+    local position = underground_pipe.position
     local old_marker = surface.find_entity("flying-text", position)
     if old_marker then old_marker.destroy() end
-
     create_marker(surface, position, self.id)
   end
+end
+
+local function start_new_network_from(pipe)
+  local new_network = Network.new()
+  new_network:add_underground_pipe(pipe)
+  local connector = Connector.for_below_unit_number(pipe.unit_number)
+  if connector then
+    new_network:add_connector(connector)
+  end
+  Network.absorb_from(pipe)
 end
 
 local function break_to_fragments(self, neighbours)
   for i=2,#neighbours do
     local neighbour = neighbours[i]
-    local new_network = Network.new()
-    self:remove_underground_pipe(neighbour, true)
-    new_network:add_underground_pipe(neighbour)
-    local connector = Connector.for_below_unit_number(neighbour.unit_number)
-    if connector then
-      new_network:add_connector(connector)
-    end
-    Network.absorb_from(neighbour)
+    start_new_network_from(neighbour)
   end
 end
 
@@ -188,6 +195,7 @@ function Network:remove_underground_pipe(entity, by_absorption)
   local connector_for_below_unit_number = Connector.for_below_unit_number
   local unit_number = entity.unit_number
   local pipes = self.pipes
+
   pipes[unit_number] = nil
   self:remove_connector_by_below_unit_number(unit_number)
   network_for_entity[unit_number] = nil
@@ -205,11 +213,23 @@ function Network:remove_underground_pipe(entity, by_absorption)
   end
 end
 
-function Network:underground_pipe_replaced(old_unit_number, new_entity)
-  self.pipes[old_unit_number] = nil
+function Network:underground_pipe_replaced(old_unit_number, entity, new_neighbours, removed_neighbours)
+  debugp(inspect{old_unit_number=old_unit_number,new=new_neighbours,old=removed_neighbours})
+
+  local new_unit_number = entity.unit_number
   network_for_entity[old_unit_number] = nil
-  local old_marker = new_entity.surface.find_entity("flying-text", new_entity.position)
-  if old_marker then old_marker.destroy() end
+  network_for_entity[new_unit_number] = self
+  self.pipes[old_unit_number] = nil
+  self.pipes[new_unit_number] = entity
+
+  for neighbour in pairs(new_neighbours) do
+    self:add_underground_pipe(neighbour)
+  end
+
+  for neighbour in pairs(removed_neighbours) do
+    self:remove_underground_pipe(neighbour, true)
+    start_new_network_from(neighbour)
+  end
 end
 
 function Network:set_connector_mode(entity, mode)

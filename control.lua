@@ -49,6 +49,7 @@ local event_handlers = {
   on_runtime_mod_setting_changed = function(event) Network.on_runtime_mod_setting_changed(event) end,
   on_tick                        = function(event) Editor.on_tick(event)                         end,
   script_raised_built            = function(event) editor:script_raised_built(event)             end,
+  script_raised_destroy          = function(event) editor:script_raised_destroy(event)           end,
 }
 
 local function on_toggle_editor(event)
