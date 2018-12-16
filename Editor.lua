@@ -632,19 +632,24 @@ end
 -- PickerPipeTools compatibility
 
 function Editor:script_raised_built(event)
-  local old_unit_number = event.replaced_entity_unit_number
   local entity = event.created_entity
-  if entity and old_unit_number then
-    local old_network = Network.for_unit_number(old_unit_number)
-    if old_network then
-      old_network:underground_pipe_replaced(old_unit_number, entity)
-    end
+  if not entity then return end
+  if not self:is_editor_surface(entity.surface) then return end
+
+  local old_unit_number = event.replaced_entity_unit_number
+  if not old_unit_number then return end
+
+  local old_network = Network.for_unit_number(old_unit_number)
+  if old_network then
+    old_network:underground_pipe_replaced(old_unit_number, entity)
   end
 
   local main_network, other_networks = newest_connected_network(entity)
-  main_network:add_underground_pipe(entity)
-  if main_network ~= network then
-    Network.absorb_from(entity)
+  if main_network then
+    main_network:add_underground_pipe(entity)
+    if main_network ~= network then
+      Network.absorb_from(entity)
+    end
   end
 end
 
