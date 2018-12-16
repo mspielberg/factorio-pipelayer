@@ -112,7 +112,7 @@ end
 
 function Network:create_or_destroy_network_markers()
   local _, pipe = next(self.pipes)
-  if not pipe then return end
+  if not pipe or not pipe.valid then return end
   local surface = pipe.surface
   local network_id = self.id
 
