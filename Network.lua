@@ -5,7 +5,7 @@ local Queue = require "lualib.Queue"
 local Scheduler = require "lualib.Scheduler"
 
 local debugp = function() end
--- debugp = function(x) log(inspect(x)) end
+-- debugp = function(...) log(inspect(...)) end
 
 local active_update_period = 1
 local inactive_update_period
@@ -416,6 +416,10 @@ local function absorb_entities(entities)
   end
 end
 
+local function schedule_absorb(tick)
+  Scheduler.schedule(tick + 1, Network.process_absorb_queue)
+end
+
 local last_processed_tick
 function Network.process_absorb_queue(tick)
   if tick == last_processed_tick then return end
@@ -432,12 +436,12 @@ function Network.process_absorb_queue(tick)
       absorb_entities(neighbours)
     end
   end
-  Scheduler.schedule(tick + 1, Network.process_absorb_queue)
+  schedule_absorb(tick)
 end
 
 function Network.absorb_from(entity)
   absorb_queue:append(entity)
-  Network.process_absorb_queue(game.tick)
+  schedule_absorb(game.tick)
 end
 
 function Network.update_all(event)
