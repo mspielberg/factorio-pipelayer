@@ -30,7 +30,16 @@ function M.instance()
 end
 
 local debugp = function() end
--- debugp = function(...) log(inspect(...)) end
+local function _debugp(...)
+  local info = debug.getinfo(2, "nl")
+  local out = inspect(...)
+  if info then
+    log(info.name..":"..info.currentline..":"..out)
+  else
+    log("?:?:"..out)
+  end
+end
+-- debugp = _debugp
 
 local function nonproxy_name(name)
   return name:match("^pipelayer%-bpproxy%-(.*)$")
@@ -458,7 +467,6 @@ function Editor:on_player_rotated_entity(event)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(surface)
   local old_network = Network.for_entity(entity)
   local main_network, found_other_networks = newest_connected_network(entity)
-  debugp(inspect{old_network=old_network,main_network=main_network})
   if old_network:is_singleton() and not main_network then
     return
   end
@@ -516,10 +524,14 @@ local previous_connector_ghost_deconstruction_player_index
 local function remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
   for _, entity in ipairs(underground_entities) do
     if is_connector(entity) then
-      local bpproxy = aboveground_surface.find_entity("pipelayer-bpproxy-pipelayer-connector", entity.position)
-      if bpproxy then
+      local bpproxies = aboveground_surface.find_entities_filtered{
+        name = "pipelayer-bpproxy-pipelayer-connector",
+        position = entity.position,
+      }
+      for _, bpproxy in pairs(bpproxies) do
         bpproxy.destroy()
       end
+
       local aboveground_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
       if aboveground_connector then
         aboveground_connector.order_deconstruction(aboveground_connector.force)
