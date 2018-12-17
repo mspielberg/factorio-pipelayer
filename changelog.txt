@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.2
+Date: 17.12.2018
+  Bugfixes:
+    - Fix crash when mining connector with robots. (https://mods.factorio.com/mod/pipelayer/discussion/5c17a0b4485acd000bd5ee01)
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 16.12.2018
   Changes:
