@@ -5,7 +5,16 @@ local Queue = require "lualib.Queue"
 local Scheduler = require "lualib.Scheduler"
 
 local debugp = function() end
--- debugp = function(...) log(inspect(...)) end
+local function _debugp(...)
+  local info = debug.getinfo(2, "nl")
+  local out = inspect(...)
+  if info then
+    log(info.name..":"..info.currentline..":"..out)
+  else
+    log("?:?:"..out)
+  end
+end
+-- debugp = _debugp
 
 local active_update_period = 1
 local inactive_update_period
@@ -160,7 +169,7 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
   elseif aboveground_connector_entity then
     local connector = Connector.for_entity(aboveground_connector_entity)
     if not connector then
-      connector = Connector.new(aboveground_connector_entity, below_unit_number)
+      connector = Connector.new(aboveground_connector_entity, unit_number)
     end
     self:add_connector(connector)
   end

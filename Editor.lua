@@ -182,7 +182,7 @@ local function on_built_aboveground_connector(self, creator, entity, stack)
   else
     local underground_connector = editor_surface.create_entity(create_args)
     underground_connector.minable = false
-    local network = connect_underground_pipe(underground_connector)
+    local network = connect_underground_pipe(underground_connector, entity)
     if is_output then
       network:set_connector_mode(entity, "output")
     end
