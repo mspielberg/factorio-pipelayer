@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.3
+Date: 24.12.2018
+  Bugfixes:
+    - Fix crash when toggling connector mode. (https://mods.factorio.com/mod/pipelayer/discussion/5c1dd793b9990c000bafd14c)
+---------------------------------------------------------------------------------------------------
 Version: 0.2.2
 Date: 17.12.2018
   Bugfixes:
