@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.4
+Date: 26.12.2018
+  Bugfixes:
+    - Fix crash when connecting underground networks. (https://mods.factorio.com/mod/pipelayer/discussion/5c23ce36a5a39c000c00fc5d)
+---------------------------------------------------------------------------------------------------
 Version: 0.2.3
 Date: 24.12.2018
   Bugfixes:
