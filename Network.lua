@@ -164,7 +164,8 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
 
   fill_pipe(underground_pipe, self.fluid_name)
 
-  if Connector.for_below_unit_number(unit_number) then
+  local connector = Connector.for_below_unit_number(unit_number)
+  if connector then
     self:add_connector(connector)
   elseif aboveground_connector_entity then
     local connector = Connector.for_entity(aboveground_connector_entity)
