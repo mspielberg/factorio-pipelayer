@@ -184,6 +184,11 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
 end
 
 local function start_new_network_from(pipe)
+  local old_network = Network.for_entity(pipe)
+  if old_network then
+    old_network:remove_underground_pipe(pipe, true)
+  end
+
   local new_network = Network.new()
   new_network:add_underground_pipe(pipe)
   local connector = Connector.for_below_unit_number(pipe.unit_number)
@@ -202,7 +207,6 @@ end
 
 function Network:remove_underground_pipe(entity, by_absorption)
   local surface = entity.surface
-  local connector_for_below_unit_number = Connector.for_below_unit_number
   local unit_number = entity.unit_number
   local pipes = self.pipes
 
@@ -224,8 +228,6 @@ function Network:remove_underground_pipe(entity, by_absorption)
 end
 
 function Network:underground_pipe_replaced(old_unit_number, entity, new_neighbours, removed_neighbours)
-  debugp(inspect{old_unit_number=old_unit_number,new=new_neighbours,old=removed_neighbours})
-
   local new_unit_number = entity.unit_number
   network_for_entity[old_unit_number] = nil
   network_for_entity[new_unit_number] = self
@@ -290,7 +292,6 @@ function Network:foreach_underground_entity(callback)
 end
 
 function Network:set_fluid(fluid_name)
-  debugp("setting fluid for network "..self.id.." to "..(fluid_name or "(nil)"))
   self.fluid_name = fluid_name
   local fluid_for_filling
   if fluid_name == "PIPELAYER-CONFLICT" then
@@ -350,7 +351,6 @@ end
 
 function Network:infer_fluid()
   local fluid_name = self:infer_fluid_from_connectors()
-  -- debugp("inferred fluid "..(fluid_name or "(nil)").." for network "..self.id)
   if fluid_name ~= self.fluid_name then
     self:set_fluid(fluid_name)
     return true
@@ -360,7 +360,6 @@ end
 
 function Network:reschedule(next_tick)
   self.next_tick = next_tick
-  --debugp{msg="reschedule", next_tick=next_tick, network_id=self.id}
   Scheduler.schedule(next_tick, function(tick) self:update(tick) end)
 end
 

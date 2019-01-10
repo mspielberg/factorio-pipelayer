@@ -1,3 +1,4 @@
+local Connector = require "Connector"
 local Editor = require "Editor"
 local Network = require "Network"
 local Queue = require "lualib.Queue"
@@ -49,6 +50,45 @@ add_migration{
       network.graph = nil
     end
     Network.on_load()
+  end,
+}
+
+local function resolve_duplicated_pipe(pipe, na, nb)
+  local unit_number = pipe.unit_number
+  log("pipe "..unit_number.." in network "..nb.id.." already seen in network "..na.id)
+  local connector = Connector.for_below_unit_number(unit_number)
+  na:remove_underground_pipe(pipe, true)
+  nb:remove_underground_pipe(pipe, true)
+  if na.id > nb.id then
+    na:add_underground_pipe(pipe, connector and connector.entity)
+  else
+    nb:add_underground_pipe(pipe, connector and connector.entity)
+  end
+end
+
+add_migration{
+  name = "v0_2_5_clean_corrupted_networks",
+  version = {0,2,5},
+  task = function()
+    local network_for_pipe = {}
+    for network_id, network in pairs(global.all_networks) do
+      for unit_number, pipe in pairs(network.pipes) do
+        if pipe.valid then
+          local previous_network = network_for_pipe[unit_number]
+          if previous_network then
+            resolve_duplicated_pipe(pipe, previous_network, network)
+          end
+          network_for_pipe[unit_number] = network
+        else
+          log("pipe "..unit_number.." in network "..network_id.." no longer valid")
+          network.pipes[unit_number] = nil
+        end
+      end
+
+      if not next(network.pipes) then
+        network:destroy()
+      end
+    end
   end,
 }
 
