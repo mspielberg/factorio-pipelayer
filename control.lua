@@ -47,7 +47,7 @@ local event_handlers = {
   on_robot_built_entity          = function(event) editor:on_robot_built_entity(event)           end,
   on_robot_mined_entity          = function(event) editor:on_robot_mined_entity(event)           end,
   on_runtime_mod_setting_changed = function(event) Network.on_runtime_mod_setting_changed(event) end,
-  on_tick                        = function(event) Editor.on_tick(event)                         end,
+  on_tick                        = function(event) editor:on_tick(event)                         end,
   script_raised_built            = function(event) editor:script_raised_built(event)             end,
   script_raised_destroy          = function(event) editor:script_raised_destroy(event)           end,
 }

@@ -4,30 +4,9 @@ local inspect = require "inspect"
 local Network = require "Network"
 local PipeMarker = require "PipeMarker"
 
-local M = {}
-
 local Editor = {}
 local super = BaseEditor.class
 setmetatable(Editor, { __index = super })
-
-
-function M.new()
-  local self = BaseEditor.new("pipelayer")
-  self.valid_editor_types = { "pipe", "pipe-to-ground" }
-  return M.restore(self)
-end
-
-function M.restore(self)
-  return setmetatable(self, { __index = Editor })
-end
-
-function M.instance()
-  if global.editor then
-    return M.restore(global.editor)
-  else
-    return M.new()
-  end
-end
 
 local debugp = function() end
 local function _debugp(...)
@@ -484,9 +463,9 @@ function Editor:on_entity_died(event)
   end
 end
 
-function M.on_tick(event)
+function Editor:on_tick(event)
   Network.update_all(event)
-  BaseEditor.on_tick(event)
+  super.on_tick(self, event)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -712,4 +691,25 @@ function Editor:on_player_changed_position(event)
   PipeMarker.on_player_changed_position(player_index, editor_surface)
 end
 
+local M = {}
+
+function M.new()
+  local self = BaseEditor.new("pipelayer")
+  self.valid_editor_types = { "pipe", "pipe-to-ground" }
+  return M.restore(self)
+end
+
+function M.restore(self)
+  return setmetatable(self, { __index = Editor })
+end
+
+function M.instance()
+  if global.editor then
+    return M.restore(global.editor)
+  else
+    return M.new()
+  end
+end
+
 return M
+
