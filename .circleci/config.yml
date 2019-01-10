@@ -1,0 +1,10 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: mspielberg/circleci-busted:5.2
+    steps:
+      - checkout
+      - run:
+          name: Run unit tests
+          command: busted -v
