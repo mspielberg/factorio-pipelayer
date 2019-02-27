@@ -4,8 +4,6 @@
 -- Concept designed and code written by TheStaplergun (staplergun on mod portal)
 -- Code revision and adaptation by Zeibach/Therax
 
-local inspect = require "inspect"
-
 local M = {}
 
 --? Bit styled table. 2 ^ defines.direction is used for entry to the table. Only compatible with 4 way directions.

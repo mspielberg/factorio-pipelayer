@@ -1,9 +1,9 @@
 require "util"
 
 local overlay_icon = {
-  icon = "__core__/graphics/arrows/indication-arrow-up-to-down.png",
-  icon_size = 64,
-  scale = 0.25,
+  icon = "__core__/graphics/icons/collapse.png",
+  icon_size = 32,
+  scale = 0.5,
   shift = {8, -8},
 }
 

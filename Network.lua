@@ -1,13 +1,12 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
-local inspect = require "inspect"
 local Queue = require "lualib.Queue"
 local Scheduler = require "lualib.Scheduler"
 
 local debugp = function() end
 local function _debugp(...)
   local info = debug.getinfo(2, "nl")
-  local out = inspect(...)
+  local out = serpent.block(...)
   if info then
     log(info.name..":"..info.currentline..":"..out)
   else
@@ -20,7 +19,7 @@ local active_update_period = 1
 local inactive_update_period
 local no_fluid_update_period
 
-local pipe_filler = {name = "water", amount = math.huge}
+local pipe_filler = {name = "water", amount = 1e9}
 local function fill_pipe(entity, fluid_name)
   if fluid_name then
     pipe_filler.name = fluid_name

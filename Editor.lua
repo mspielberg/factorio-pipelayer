@@ -1,6 +1,5 @@
 local BaseEditor = require "lualib.BaseEditor.BaseEditor"
 local Connector = require "Connector"
-local inspect = require "inspect"
 local Network = require "Network"
 local PipeMarker = require "PipeMarker"
 
@@ -11,7 +10,7 @@ setmetatable(Editor, { __index = super })
 local debugp = function() end
 local function _debugp(...)
   local info = debug.getinfo(2, "nl")
-  local out = inspect(...)
+  local out = serpent.block(...)
   if info then
     log(info.name..":"..info.currentline..":"..out)
   else
@@ -565,8 +564,8 @@ function Editor:on_pre_ghost_deconstructed(event)
   end
 end
 
-function Editor:on_canceled_deconstruction(event)
-  super.on_canceled_deconstruction(self, event)
+function Editor:on_cancelled_deconstruction(event)
+  super.on_cancelled_deconstruction(self, event)
   local entity = event.entity
   if entity.valid and is_connector(entity) then
     local counterpart = self:counterpart_surface(entity.surface).find_entity("pipelayer-connector", entity.position)

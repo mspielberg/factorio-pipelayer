@@ -1,7 +1,7 @@
 local empty_sprite = {
   filename = "__core__/graphics/empty.png",
-  width = 0,
-  height = 0,
+  width = 1,
+  height = 1,
   frame_count = 1,
 }
 

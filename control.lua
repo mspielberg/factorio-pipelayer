@@ -30,7 +30,7 @@ end
 
 local event_handlers = {
   on_built_entity                = function(event) editor:on_built_entity(event)                 end,
-  on_canceled_deconstruction     = function(event) editor:on_canceled_deconstruction(event)      end,
+  on_cancelled_deconstruction    = function(event) editor:on_cancelled_deconstruction(event)     end,
   on_entity_died                 = function(event) editor:on_entity_died(event)                  end,
   on_marked_for_deconstruction   = function(event) editor:on_marked_for_deconstruction(event)    end,
   on_picked_up_item              = function(event) editor:on_picked_up_item(event)               end,

@@ -1,4 +1,3 @@
-serpent = require "serpent"
 local M = {}
 
 -- connection_type[entity_name] = { [x] = { [y] = "input", ...}, ... }

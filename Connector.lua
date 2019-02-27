@@ -105,10 +105,18 @@ function Connector:transfer_to(expected_fluid, to_connector)
   local new_to_temperature = (from_weighted_temperature + to_weighted_temperature) / (from_amount + to_amount)
 
   local new_from_amount = from_amount - amount_to_move
-  from_fluidbox[1] = {amount = new_from_amount, name = expected_fluid, temperature = from_temperature}
+  if new_from_amount > 0 then
+    from_fluidbox[1] = {amount = new_from_amount, name = expected_fluid, temperature = from_temperature}
+  else
+    from_fluidbox[1] = nil
+  end
 
   local new_to_amount = to_amount + amount_to_move
-  to_fluidbox[1] = {amount = new_to_amount, name = expected_fluid, temperature = new_to_temperature}
+  if new_to_amount > 0 then
+    to_fluidbox[1] = {amount = new_to_amount, name = expected_fluid, temperature = new_to_temperature}
+  else
+    to_fluidbox[1] = nil
+  end
 
   return amount_to_move
 end
