@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.2
+Date: 15.04.2019
+  Bugfixes:
+    - Fix crash when mining a dropped item on ground in the editor view that has been marked for deconstruction. (https://mods.factorio.com/mod/pipelayer/discussion/5caa466c56a75b000c1a6166)
+    - Fix crash when another mod cancels deconstruction on an entity without specifying a player. (https://mods.factorio.com/mod/pipelayer/discussion/5cb2d7354ec28f000c0576a4)
+---------------------------------------------------------------------------------------------------
 Version: 0.3.1
 Date: 03.03.2019
   Bugfixes:
