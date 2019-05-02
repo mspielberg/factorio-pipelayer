@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.3
+Date: 02.05.2019
+  Bugfixes:
+    - Fix crash when a spectator moves. (https://mods.factorio.com/mod/pipelayer/discussion/5cc5703f073cd9000d0258d1)
+    - Fix duplicate blueprint proxies appearing on the surface when marking an underground area for deconstruction.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.2
 Date: 15.04.2019
   Bugfixes:
