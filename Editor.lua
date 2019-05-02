@@ -499,22 +499,17 @@ end
 local previous_connector_ghost_deconstruction_tick
 local previous_connector_ghost_deconstruction_player_index
 
-local function remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
-  for _, entity in ipairs(underground_entities) do
-    if is_connector(entity) then
-      local bpproxies = aboveground_surface.find_entities_filtered{
-        name = "pipelayer-bpproxy-pipelayer-connector",
-        position = entity.position,
-      }
-      for _, bpproxy in pairs(bpproxies) do
-        bpproxy.destroy()
-      end
-
-      local aboveground_connector = aboveground_surface.find_entity("pipelayer-connector", entity.position)
-      if aboveground_connector then
-        aboveground_connector.order_deconstruction(aboveground_connector.force)
-      end
+local function remove_connector_deconstruction_proxies(aboveground_surface, area)
+  local bpproxies = aboveground_surface.find_entities_filtered{
+    name = "pipelayer-bpproxy-pipelayer-connector",
+    area = area,
+  }
+  for _, bpproxy in pairs(bpproxies) do
+    local aboveground_connector = aboveground_surface.find_entity("pipelayer-connector", bpproxy.position)
+    if aboveground_connector then
+      aboveground_connector.order_deconstruction(aboveground_connector.force)
     end
+    bpproxy.destroy()
   end
 end
 
@@ -527,7 +522,7 @@ local function on_player_deconstructed_surface_area(self, player, area, tool)
   end
   local editor_surface = self:editor_surface_for_aboveground_surface(aboveground_surface)
   local underground_entities = self:order_underground_deconstruction(player, editor_surface, area, tool)
-  remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
+  remove_connector_deconstruction_proxies(aboveground_surface, area)
 
   if next(underground_entities) and
      settings.get_player_settings(player)["pipelayer-deconstruction-warning"].value then
@@ -536,9 +531,8 @@ local function on_player_deconstructed_surface_area(self, player, area, tool)
 end
 
 local function on_player_deconstructed_underground_area(self, player, area, tool)
-  local underground_entities = self:order_underground_deconstruction(player, player.surface, area, tool)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(player.surface)
-  remove_connector_deconstruction_proxies(aboveground_surface, underground_entities)
+  remove_connector_deconstruction_proxies(aboveground_surface, area)
 end
 
 function Editor:on_player_deconstructed_area(event)
