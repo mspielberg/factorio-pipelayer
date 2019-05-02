@@ -684,8 +684,9 @@ function Editor:on_player_changed_position(event)
   local editor_surface = self:get_editor_surface(player.surface)
   if not editor_surface then return end
 
-  local cursor_name = player.cursor_stack.valid_for_read and player.cursor_stack.name
-  if cursor_name ~= "pipelayer-connector" then return end
+  local cursor_stack = player.cursor_stack
+  if not cursor_stack or not cursor_stack.valid_for_read then return end
+  if cursor_stack.name ~= "pipelayer-connector" then return end
 
   PipeMarker.on_player_changed_position(player_index, editor_surface)
 end

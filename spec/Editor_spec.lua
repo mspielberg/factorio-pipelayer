@@ -29,6 +29,8 @@ local function setup_mocks()
     is_chunk_generated = function() return true end,
   }
 
+  local player = {}
+
   local position = {x=1, y=2}
   local function ghost_mock(surface, ghost_name, direction)
     return {
@@ -55,6 +57,8 @@ local function setup_mocks()
   local editor_final_ghost = ghost_mock(editor_surface, "pipelayer-connector", 4)
 
   _G.game = {
+    delete_surface = function() end,
+    players = { player },
     surfaces = {
       nauvis = nauvis,
       pipelayer = editor_surface,
@@ -62,6 +66,8 @@ local function setup_mocks()
   }
 
   return {
+    player = player,
+
     nauvis = nauvis,
 
     nauvis_connector_ghost = nauvis_connector_ghost,
@@ -263,6 +269,13 @@ describe("A pipelayer editor", function()
           assert.stub(m.editor_connector_ghost.destroy).was.called()
         end)
       end)
+    end)
+  end)
+
+  describe("handles pipe markers", function()
+    it("when player is a spectator", function()
+      m.player.surface = m.editor_surface
+      uut:on_player_changed_position{player_index = 1}
     end)
   end)
 end)
