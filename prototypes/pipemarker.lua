@@ -58,11 +58,11 @@ for direction_index, directions in pairs(directional_table) do
 end
 
 for _, stuff in pairs(new_dots) do
-  data:extend {
-      merge {
-          base_entity,
-          stuff
-      }
+  data:extend{
+    merge{
+      base_entity,
+      stuff
+    }
   }
 end
 
@@ -77,42 +77,22 @@ marker_beams.damage_interval = 2000000000
 marker_beams.action = nil
 
 --? Start and ending properties must be present but have to match framecount of body and other properties
-marker_beams.start = {
+local empty_animation = {
     filename = '__core__/graphics/empty.png',
     line_length = 1,
     width = 1,
     height = 1,
     frame_count = 1,
     axially_symmetrical = false,
-    direction_count = 1,
-    hr_version = {
-        filename = '__core__/graphics/empty.png',
-        line_length = 1,
-        width = 1,
-        height = 1,
-        frame_count = 1,
-        axially_symmetrical = false,
-        direction_count = 1
-    }
+    direction_count = 1
 }
-marker_beams.ending = {
-    filename = '__core__/graphics/empty.png',
-    line_length = 1,
-    width = 1,
-    height = 1,
-    frame_count = 1,
-    axially_symmetrical = false,
-    direction_count = 1,
-    hr_version = {
-        filename = '__core__/graphics/empty.png',
-        line_length = 1,
-        width = 1,
-        height = 1,
-        frame_count = 1,
-        axially_symmetrical = false,
-        direction_count = 1
-    }
-}
+marker_beams.start = empty_animation
+marker_beams.start_light = empty_animation
+marker_beams.ending = empty_animation
+marker_beams.ending_light = empty_animation
+marker_beams.head_light = empty_animation
+marker_beams.tail_light = empty_animation
+marker_beams.body_light = empty_animation
 
 --? Head tail and body must all have same frame count
 marker_beams.head = {
