@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.4
+Date: 13.06.2019
+  Bugfixes:
+    - Fix crash on startup on 0.17.47 or later. (https://mods.factorio.com/mod/pipelayer/discussion/5cfb305d9a835e000bc3907f)
+    - Remove duplicate blueprint proxy ghosts above ground if present from an older version.
+  Changes:
+    - Add support for the 0.17 Cut tool.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.3
 Date: 02.05.2019
   Bugfixes:
