@@ -535,17 +535,19 @@ local function on_player_deconstructed_underground_area(self, player, area, tool
   remove_connector_deconstruction_proxies(aboveground_surface, area)
 end
 
+local function on_player_deconstructed_area(self, player, area, tool)
+  local surface = player.surface
+  if self:is_valid_aboveground_surface(surface) then
+    return on_player_deconstructed_surface_area(self, player, area, tool)
+  elseif self:is_editor_surface(surface) then
+    return on_player_deconstructed_underground_area(self, player, area, tool)
+  end
+end
+
 function Editor:on_player_deconstructed_area(event)
   if event.alt then return end
   local player = game.players[event.player_index]
-  local surface = player.surface
-  local tool = player.cursor_stack
-  if not tool or not tool.valid_for_read or not tool.is_deconstruction_item then return end
-  if self:is_valid_aboveground_surface(surface) then
-    return on_player_deconstructed_surface_area(self, player, event.area, tool)
-  elseif self:is_editor_surface(surface) then
-    return on_player_deconstructed_underground_area(self, player, event.area, tool)
-  end
+  on_player_deconstructed_area(self, player, event.area, player.cursor_stack)
 end
 
 function Editor:on_pre_ghost_deconstructed(event)
@@ -606,7 +608,11 @@ function on_player_setup_aboveground_blueprint(self, event)
 end
 
 function Editor:on_player_setup_blueprint(event)
-  return on_player_setup_aboveground_blueprint(self, event)
+  on_player_setup_aboveground_blueprint(self, event)
+  if event.item == "cut-paste-tool" and event.alt then
+    local player = game.players[event.player_index]
+    on_player_deconstructed_area(self, player, event.area, nil)
+  end
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -706,4 +712,3 @@ function M.instance()
 end
 
 return M
-
