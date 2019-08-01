@@ -22,6 +22,7 @@ local function make_proxy(proto)
   proxy_proto.localised_name = {"entity-name.pipelayer-bpproxy", proto.localised_name or {"entity-name."..proto.name}}
   proxy_proto.collision_mask = {}
   proxy_proto.flags = {"player-creation"}
+  proxy_proto.fluid_box.pipe_connections = {}
   proxy_proto.placeable_by = proxy_proto.placeable_by or {{item=proto.minable.result, count=1}}
   add_tint(proxy_proto, {r = 0.5, g = 0.5, b = 0.8, a = 0.25})
   return proxy_proto
