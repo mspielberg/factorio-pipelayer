@@ -19,7 +19,7 @@ local active_update_period = 1
 local inactive_update_period
 local no_fluid_update_period
 
-local pipe_filler = {name = "water", amount = 1e9}
+local pipe_filler = {name = "water", amount = 0.1}
 local function fill_pipe(entity, fluid_name)
   if fluid_name then
     pipe_filler.name = fluid_name
@@ -161,7 +161,7 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
   network_for_entity[unit_number] = self
   self.pipes[unit_number] = underground_pipe
 
-  fill_pipe(underground_pipe, self.fluid_name)
+  --fill_pipe(underground_pipe, self.fluid_name)
 
   local connector = Connector.for_below_unit_number(unit_number)
   if connector then
@@ -171,6 +171,7 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
     if not connector then
       connector = Connector.new(aboveground_connector_entity, unit_number)
     end
+    fill_pipe(underground_pipe, aboveground_connector_entity.fluidbox.get_locked_fluid(1))
     self:add_connector(connector)
   end
 
@@ -292,29 +293,17 @@ end
 
 function Network:set_fluid(fluid_name)
   self.fluid_name = fluid_name
-  local fluid_for_filling
   if fluid_name == "PIPELAYER-CONFLICT" then
-    fluid_for_filling = nil
-  else
-    fluid_for_filling = fluid_name
-  end
-
-  if fluid_name then
     self:foreach_underground_entity(function(entity)
-      fill_pipe(entity, fluid_for_filling)
+      fill_pipe(entity, nil)
     end)
-  end
-
-  if not fluid_for_filling then
+  else
     local _, pipe = next(self.pipes)
     local surface = pipe.surface
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
       local counterpart = surface.find_entity("pipelayer-connector", connector.entity.position)
-      local fluidbox = connector.entity.fluidbox[1]
-      if fluidbox then
-        fill_pipe(counterpart, fluidbox.name)
-      end
+      fill_pipe(counterpart, fluid_name)
     end)
   end
 end
@@ -323,15 +312,15 @@ function Network:infer_fluid_from_connectors()
   local inferred_fluid
   local conflict
   foreach_connector(self, function(connector)
-    local connector_fluidbox = connector.entity.fluidbox[1]
-    if connector_fluidbox then
+    local locked_fluid = connector.entity.fluidbox.get_locked_fluid(1)
+    if locked_fluid then
       if inferred_fluid then
-        if connector_fluidbox.name ~= inferred_fluid then
+        if locked_fluid ~= inferred_fluid then
           conflict = true
           return
         end
       else
-        inferred_fluid = connector_fluidbox.name
+        inferred_fluid = locked_fluid
       end
     end
   end)
@@ -364,6 +353,11 @@ end
 
 local function try_to_transfer(self)
   if not all_networks[self.id] then return nil end
+
+  if self.connectors:is_empty() then
+    self:set_fluid(nil)
+    return no_fluid_update_period
+  end
 
   if not self.fluid_name or self.fluid_name == "PIPELAYER-CONFLICT" then
     local success = self:infer_fluid()

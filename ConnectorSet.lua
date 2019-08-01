@@ -152,4 +152,8 @@ function ConnectorSet:all_connectors()
   end
 end
 
+function ConnectorSet:is_empty()
+  return not (next(self.input_connectors) or next(self.output_connectors))
+end
+
 return M
