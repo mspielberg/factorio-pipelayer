@@ -1,6 +1,6 @@
 local Connector = require "Connector"
 local ConnectorSet = require "ConnectorSet"
-local Queue = require "lualib.Queue"
+local dheap = require "lualib.dheap"
 local Scheduler = require "lualib.Scheduler"
 
 local debugp = function() end
@@ -42,19 +42,24 @@ local all_networks
 local absorb_queue
 local network_for_entity = {}
 
+function Network.refresh_locals()
+  all_networks = global.all_networks
+  if global.absorb_queue then
+    absorb_queue = dheap.restore(global.absorb_queue)
+  end
+end
+
 function Network.on_init()
   global.all_networks = {}
   global.network_iter = nil
-  global.absorb_queue = Queue.new()
+  global.absorb_queue = dheap.new()
   Network.on_load()
 end
 
 function Network.on_load()
+  log("running Network.on_load")
   set_update_periods()
-  all_networks = global.all_networks
-  if global.absorb_queue then
-    absorb_queue = Queue.restore(global.absorb_queue)
-  end
+  Network.refresh_locals()
   Scheduler.schedule(0, Network.process_absorb_queue)
   for _, network in pairs(all_networks) do
     setmetatable(network, {__index = Network})
@@ -156,6 +161,7 @@ end
 
 function Network:add_underground_pipe(underground_pipe, aboveground_connector_entity)
   local surface = underground_pipe.surface
+  if surface ~= self.surface then error("tried to add pipe on different surface to Network") end
 
   local unit_number = underground_pipe.unit_number
   network_for_entity[unit_number] = self
@@ -212,7 +218,9 @@ function Network:remove_underground_pipe(entity, by_absorption)
 
   pipes[unit_number] = nil
   self:remove_connector_by_below_unit_number(unit_number)
-  network_for_entity[unit_number] = nil
+  if network_for_entity[unit_number] == self then
+    network_for_entity[unit_number] = nil
+  end
 
   local old_marker = surface.find_entity("flying-text", entity.position)
   if old_marker then old_marker.destroy() end
@@ -298,11 +306,9 @@ function Network:set_fluid(fluid_name)
       fill_pipe(entity, nil)
     end)
   else
-    local _, pipe = next(self.pipes)
-    local surface = pipe.surface
     -- make sure underground connector counterparts reflect content of overworld
     foreach_connector(self, function(connector)
-      local counterpart = surface.find_entity("pipelayer-connector", connector.entity.position)
+      local counterpart = self.surface.find_entity("pipelayer-connector", connector.entity.position)
       fill_pipe(counterpart, fluid_name)
     end)
   end
@@ -433,7 +439,7 @@ local function absorb_entities(entities)
     local old_network_id = network_ids[i]
     if not old_network_id or old_network_id < highest_network_id then
       highest_network:absorb_one(entity)
-      absorb_queue:append(entity)
+      absorb_queue:insert(-highest_network_id, entity)
     end
   end
 end
@@ -448,7 +454,7 @@ function Network.process_absorb_queue(tick)
   last_processed_tick = tick
 
   for i=1,10 do
-    local next_entity = absorb_queue:dequeue()
+    local _, next_entity = absorb_queue:pop()
     if not next_entity then
       return
     end
@@ -462,7 +468,8 @@ function Network.process_absorb_queue(tick)
 end
 
 function Network.absorb_from(entity)
-  absorb_queue:append(entity)
+  log(serpent.line(Network.for_entity(entity)))
+  absorb_queue:insert(-Network.for_entity(entity).id, entity)
   schedule_absorb(game.tick)
 end
 

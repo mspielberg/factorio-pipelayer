@@ -2,6 +2,7 @@ local Connector = require "Connector"
 local Editor = require "Editor"
 local Network = require "Network"
 local Queue = require "lualib.Queue"
+local dheap = require "lualib.dheap"
 local version = require "lualib.version"
 
 local M = {}
@@ -137,6 +138,26 @@ add_migration{
       local _, p = next(n.pipes)
       n.surface = p.surface
     end
+  end,
+}
+
+add_migration{
+  name = "v0_3_5_change_queue_to_dheap",
+  version = {0,3,5},
+  task = function()
+    local q = global.absorb_queue
+    Queue.restore(q)
+    local heap = dheap.new()
+    local entity = q:dequeue()
+    while entity do
+      if entity.valid then
+        local network = Network.for_entity(entity)
+        heap:insert(-network.id, entity)
+      end
+      entity = q:dequeue()
+    end
+    global.absorb_queue = heap
+    Network.refresh_locals()
   end,
 }
 
