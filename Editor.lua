@@ -100,7 +100,7 @@ local function connect_underground_pipe(entity, aboveground_connector_entity)
   entity.active = false
   local main_network, found_other_networks = newest_connected_network(entity)
   if not main_network then
-    main_network = Network.new()
+    main_network = Network.new(entity.surface)
   end
 
   main_network:add_underground_pipe(entity, aboveground_connector_entity)

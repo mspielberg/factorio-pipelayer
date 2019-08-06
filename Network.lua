@@ -83,11 +83,12 @@ end
     connectors = ConnectorSet(),
   }
 ]]
-function Network.new()
+function Network.new(surface)
   global.network_id = (global.network_id or 0) + 1
   local network_id = global.network_id
   local self = {
     id = network_id,
+    surface = surface,
     fluid_name = nil,
     pipes = {},
     connectors = ConnectorSet.new(),
@@ -195,7 +196,7 @@ local function start_new_network_from(pipe)
     old_network:remove_underground_pipe(pipe, true)
   end
 
-  local new_network = Network.new()
+  local new_network = Network.new(pipe.surface)
   new_network:add_underground_pipe(pipe)
   local connector = Connector.for_below_unit_number(pipe.unit_number)
   if connector then
