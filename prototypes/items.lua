@@ -1,10 +1,12 @@
 require "util"
 
 local overlay_icon = {
-  icon = "__core__/graphics/icons/collapse.png",
+  icon = "__core__/graphics/icons/mip/collapse.png",
   icon_size = 32,
   scale = 0.5,
-  shift = {8, -8},
+  shift = {-8, -8},
+  icon_mipmaps = 2,
+  tint = {r=1,g=1,b=0,a=1},
 }
 
 

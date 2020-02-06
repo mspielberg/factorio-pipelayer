@@ -642,28 +642,34 @@ local function set_diff(s1, s2)
   return added, removed
 end
 
+local old_unit_number
 local old_neighbours
-function Editor:script_raised_destroy(event)
+function Editor:on_script_raised_destroy(event)
+  super.on_script_raised_destroy(self, event)
+
   entity = event.entity
-  if not entity then return end
+  if not entity or not entity.valid then return end
   if not self:is_editor_surface(entity.surface) then return end
   if entity.type == "pipe-to-ground" then
+    old_unit_number = entity.unit_number
     old_neighbours = to_set(entity.neighbours[1] or {})
   end
 end
 
-function Editor:script_raised_built(event)
-  local entity = event.created_entity
-  if not entity then return end
+function Editor:on_script_raised_built(event)
+  super.on_script_raised_built(self, event)
+
+  local entity = event.entity or event.created_entity
+  if not entity or not entity.valid then return end
   local type = entity.type
   if not self:is_editor_surface(entity.surface) then return end
 
-  local replaced_entity_unit_number = event.replaced_entity_unit_number
-
   local new_neighbours = to_set(entity.neighbours[1] or {})
   local added, removed = set_diff(old_neighbours, new_neighbours)
-  local network = Network.for_unit_number(replaced_entity_unit_number)
-  network:underground_pipe_replaced(replaced_entity_unit_number, entity, added, removed)
+  local network = old_unit_number and Network.for_unit_number(old_unit_number)
+  if network then
+    network:underground_pipe_replaced(old_unit_number, entity, added, removed)
+  end
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -695,7 +701,10 @@ local M = {}
 
 function M.new()
   local self = BaseEditor.new("pipelayer")
-  self.valid_editor_types = { "pipe", "pipe-to-ground" }
+  self.valid_editor_types = {
+    "blueprint", "blueprint-book", "deconstruction-item", "upgrade-item",
+    "pipe", "pipe-to-ground",
+  }
   return M.restore(self)
 end
 

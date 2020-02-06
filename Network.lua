@@ -57,7 +57,6 @@ function Network.on_init()
 end
 
 function Network.on_load()
-  log("running Network.on_load")
   set_update_periods()
   Network.refresh_locals()
   Scheduler.schedule(0, Network.process_absorb_queue)

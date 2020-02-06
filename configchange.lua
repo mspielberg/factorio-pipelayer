@@ -161,4 +161,20 @@ add_migration{
   end,
 }
 
+add_migration{
+  name = "v0_4_0_empty underground_pipes",
+  version = {0,4,0},
+  task = function()
+    for _, n in pairs(global.all_networks) do
+      local filler
+      if n.fluid_name then
+        filler = {name = n.fluid_name, amount = 0.1}
+      end
+      for _, p in pairs(n.pipes) do
+        p.fluidbox[1] = filler
+      end
+    end
+  end,
+}
+
 return M
