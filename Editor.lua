@@ -661,11 +661,11 @@ function Editor:on_script_raised_built(event)
 
   local entity = event.entity or event.created_entity
   if not entity or not entity.valid then return end
-  local type = entity.type
+  if entity.type ~= "pipe-to-ground" then return end
   if not self:is_editor_surface(entity.surface) then return end
 
   local new_neighbours = to_set(entity.neighbours[1] or {})
-  local added, removed = set_diff(old_neighbours, new_neighbours)
+  local added, removed = set_diff(old_neighbours or {}, new_neighbours)
   local network = old_unit_number and Network.for_unit_number(old_unit_number)
   if network then
     network:underground_pipe_replaced(old_unit_number, entity, added, removed)
