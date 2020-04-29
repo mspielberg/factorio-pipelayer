@@ -554,7 +554,7 @@ function Editor:on_pre_ghost_deconstructed(event)
   super.on_pre_ghost_deconstructed(self, event)
   local ghost = event.ghost
   if is_connector(ghost) then
-    previous_connector_ghost_deconstruction_player_index = player_index
+    previous_connector_ghost_deconstruction_player_index = event.player_index
     previous_connector_ghost_deconstruction_tick = game.tick
     on_connector_ghost_removed(self, ghost)
   end
@@ -578,7 +578,7 @@ local function is_output_connector(entity)
   return entity and Connector.for_below_unit_number(entity.unit_number).mode == "output"
 end
 
-function on_player_setup_aboveground_blueprint(self, event)
+local function on_player_setup_aboveground_blueprint(self, event)
   local player = game.players[event.player_index]
   local surface = player.surface
   local editor_surface
@@ -647,12 +647,17 @@ local old_neighbours
 function Editor:on_script_raised_destroy(event)
   super.on_script_raised_destroy(self, event)
 
-  entity = event.entity
+  local entity = event.entity
   if not entity or not entity.valid then return end
-  if not self:is_editor_surface(entity.surface) then return end
-  if entity.type == "pipe-to-ground" then
-    old_unit_number = entity.unit_number
-    old_neighbours = to_set(entity.neighbours[1] or {})
+  if self:is_valid_aboveground_surface(entity.surface) then
+    if entity.name == "pipelayer-connector" then
+      on_mined_surface_connector(self, entity)
+    end
+  elseif self:is_editor_surface(entity.surface) then
+    if entity.type == "pipe-to-ground" then
+      old_unit_number = entity.unit_number
+      old_neighbours = to_set(entity.neighbours[1] or {})
+    end
   end
 end
 
