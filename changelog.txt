@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.4.2
+Date: 28.04.2020
+  Bugfixes:
+    - Fix delayed crash when pipelayer connectors are destroyed by another mod. (https://github.com/mspielberg/factorio-pipelayer/issues/4)
+---------------------------------------------------------------------------------------------------
 Version: 0.4.1
 Date: 14.02.2020
   Bugfixes:
