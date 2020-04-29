@@ -85,50 +85,49 @@ function ConnectorSet:add(connector)
   end
 end
 
-function ConnectorSet:next_input()
-  local l = self.input_connectors
-  local i = self.input_iter
+local function next_connector(self, mode, predicate)
+  local l = self[mode.."_connectors"]
+  local i = self[mode.."_iter"]
   if i > #l then
     i = 1
   end
+
   local starting_index = i
+  local connectors_to_remove = {}
+  local connector_to_return
   repeat
     local connector = l[i]
     if connector then
-      if connector:ready_as_input() then
-        self.input_iter = i
-        return connector
+      if connector:valid() then
+        if predicate(connector) then
+          self[mode.."_iter"] = i
+          connector_to_return = connector
+          break
+        else
+          i = i + 1
+        end
       else
+        connectors_to_remove[#connectors_to_remove+1] = connector
         i = i + 1
       end
     else
       i = 1
     end
   until i == starting_index
-  return nil
+
+  for _, connector in pairs(connectors_to_remove) do
+    self:remove(connector)
+  end
+
+  return connector_to_return
+end
+
+function ConnectorSet:next_input()
+  return next_connector(self, "input", function(c) return c:ready_as_input() end)
 end
 
 function ConnectorSet:next_output()
-  local l = self.output_connectors
-  local i = self.output_iter
-  if i > #l then
-    i = 1
-  end
-  local starting_index = i
-  repeat
-    local connector = l[i]
-    if connector then
-      if connector:ready_as_output() then
-        self.output_iter = i
-        return connector
-      else
-        i = i + 1
-      end
-    else
-      i = 1
-    end
-  until i == starting_index
-  return nil
+  return next_connector(self, "output", function(c) return c:ready_as_output() end)
 end
 
 function ConnectorSet:all_connectors()

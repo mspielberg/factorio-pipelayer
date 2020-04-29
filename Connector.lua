@@ -56,6 +56,10 @@ function M.infer_mode_for_connectors(entity)
   end
 end
 
+function Connector:valid()
+  return self.entity.valid
+end
+
 function Connector:ready_as_input()
   self.fluidbox = self.fluidbox or self.entity.fluidbox
   local fluid = self.fluidbox[1]
