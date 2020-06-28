@@ -104,6 +104,10 @@ bpproxy_output_connector.name = "pipelayer-output-connector"
 bpproxy_output_connector.flags = {"player-creation"}
 bpproxy_output_connector.placeable_by = {{item="pipelayer-connector", count=1}}
 
+se_allow_in_space = se_allow_in_space or {}
+se_allow_in_space[connector.name] = true
+se_allow_in_space[bpproxy_output_connector.name] = true
+
 data:extend{
   connector,
   bpproxy_output_connector,

@@ -3,7 +3,7 @@ Version: 0.4.3
 Date: ??.??.????
   Bugfixes:
     - Fix compatibility with Factorio 0.18.32+. (https://mods.factorio.com/mod/pipelayer/discussion/5ef37b51f65fa4000d1eedb4)
-    - Fix pipelayer ghosts not building properly when playing with Space Exploration. (https://mods.factorio.com/mod/pipelayer/discussion/5eac3ee2e99b81000b020ebd)
+    - Fix pipelayer ghosts not building in the correct direction when playing with Space Exploration. (https://mods.factorio.com/mod/pipelayer/discussion/5eac3ee2e99b81000b020ebd)
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.2
 Date: 28.04.2020
