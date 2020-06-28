@@ -173,11 +173,13 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
   if connector then
     self:add_connector(connector)
   elseif aboveground_connector_entity then
+    local fluid_name = aboveground_connector_entity.fluidbox[1] and
+      aboveground_connector_entity.fluidbox[1].name
+    fill_pipe(underground_pipe, fluid_name)
     local connector = Connector.for_entity(aboveground_connector_entity)
     if not connector then
       connector = Connector.new(aboveground_connector_entity, unit_number)
     end
-    fill_pipe(underground_pipe, aboveground_connector_entity.fluidbox.get_locked_fluid(1))
     self:add_connector(connector)
   end
 
@@ -318,15 +320,16 @@ function Network:infer_fluid_from_connectors()
   local inferred_fluid
   local conflict
   foreach_connector(self, function(connector)
-    local locked_fluid = connector.entity.fluidbox.get_locked_fluid(1)
-    if locked_fluid then
+    local fluidbox = connector.entity.fluidbox[1]
+    local fluid_name = fluidbox and fluidbox.name
+    if fluid_name then
       if inferred_fluid then
-        if locked_fluid ~= inferred_fluid then
+        if fluid_name ~= inferred_fluid then
           conflict = true
           return
         end
       else
-        inferred_fluid = locked_fluid
+        inferred_fluid = fluid_name
       end
     end
   end)
@@ -409,7 +412,7 @@ function Network:absorb_one(entity)
 
   self:add_underground_pipe(entity)
   if entity.name == "pipelayer-connector" then
-    connector = Connector.for_below_unit_number(entity.unit_number)
+    local connector = Connector.for_below_unit_number(entity.unit_number)
     if connector then
       self:add_connector(connector)
     end
