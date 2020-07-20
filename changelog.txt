@@ -3,6 +3,7 @@ Version: 0.4.4
 Date: ????-??-??
   Bugfixes:
     - Fix highlighting of underground pipes in the pipe layer.
+    - Fix pipes in the pipe layer not showing fluid icons.
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.3
 Date: 2020-06-27

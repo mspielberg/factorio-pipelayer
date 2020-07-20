@@ -20,12 +20,14 @@ local inactive_update_period
 local no_fluid_update_period
 
 local pipe_filler = {name = "water", amount = 0.1}
-local function fill_pipe(entity, fluid_name)
+local function fill_pipes(fluid_name, entities)
+  local filler
   if fluid_name then
     pipe_filler.name = fluid_name
-    entity.fluidbox[1] = pipe_filler
-  else
-    entity.fluidbox[1] = nil
+    filler = pipe_filler
+  end
+  for _, entity in pairs(entities) do
+    entity.fluidbox[1] = filler
   end
 end
 
@@ -167,7 +169,7 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
   network_for_entity[unit_number] = self
   self.pipes[unit_number] = underground_pipe
 
-  --fill_pipe(underground_pipe, self.fluid_name)
+  fill_pipes(self.fluid_name, {underground_pipe})
 
   local connector = Connector.for_below_unit_number(unit_number)
   if connector then
@@ -175,7 +177,7 @@ function Network:add_underground_pipe(underground_pipe, aboveground_connector_en
   elseif aboveground_connector_entity then
     local fluid_name = aboveground_connector_entity.fluidbox[1] and
       aboveground_connector_entity.fluidbox[1].name
-    fill_pipe(underground_pipe, fluid_name)
+    fill_pipes(fluid_name, {underground_pipe})
     local connector = Connector.for_entity(aboveground_connector_entity)
     if not connector then
       connector = Connector.new(aboveground_connector_entity, unit_number)
@@ -304,15 +306,18 @@ end
 function Network:set_fluid(fluid_name)
   self.fluid_name = fluid_name
   if fluid_name == "PIPELAYER-CONFLICT" then
-    self:foreach_underground_entity(function(entity)
-      fill_pipe(entity, nil)
+    fill_pipes(nil, self.pipes)
+    foreach_connector(self, function(connector)
+      local connector_fluid_name = connector.fluidbox[1] and connector.fluidbox[1].name
+      local counterpart = self.surface.find_entity("pipelayer-connector", connector.entity.position)
+      fill_pipes(connector_fluid_name, {counterpart})
     end)
   else
-    -- make sure underground connector counterparts reflect content of overworld
-    foreach_connector(self, function(connector)
-      local counterpart = self.surface.find_entity("pipelayer-connector", connector.entity.position)
-      fill_pipe(counterpart, fluid_name)
+    local pipes = {}
+    self:foreach_underground_entity(function(entity)
+      pipes[#pipes+1] = entity
     end)
+    fill_pipes(fluid_name, pipes)
   end
 end
 
