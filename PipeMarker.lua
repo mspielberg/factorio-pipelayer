@@ -155,9 +155,7 @@ local function highlight_pipelayer_surface(player_index, editor_surface, area)
     all_markers[markers_made] = create{
       name = 'pipelayer-pipe-marker-beam',
       position = entity_position,
-      --? Beam source position is off. Have to compensate by shifting down one tile.
-      source_position = {entity_position.x, entity_position.y + 1},
-      --TODO 0.17 source_position = {entity_position.x, entity_position.y},
+      source_position = {entity_position.x, entity_position.y},
       target_position = {neighbour_position.x, neighbour_position.y},
       duration = 2000000000
     }
