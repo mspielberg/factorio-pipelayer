@@ -1,7 +1,8 @@
 ---------------------------------------------------------------------------------------------------
-Version: 0.4.5
-Date: ????
-  Changes:
+Version: 0.5.0
+Date: 2020-07-30
+  Info:
+    - Update to Factorio 1.1.
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.4
 Date: 2020-07-21
@@ -27,8 +28,9 @@ Date: 2020-02-14
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.0
 Date: 2020-02-06
-  Compatibility:
+  Info:
     - Update to Factorio 0.18.
+  Minor Features:
     - Add compatibility with Oarc Multiplayer Spawn.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.6
@@ -42,7 +44,7 @@ Date: 2019-08-01
     - Fix crash caused by deconstruction proxies trying to connect to adjacent pipes, but failing because it would link pipes with different fluids.
   Changes:
     - Pipes underground show as having 0 fluid amount. They still display fluid icons for convenience.
-  Performance:
+  Optimisations:
     - Improve speed at which merged large underground pipe networks converge.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.4
@@ -100,9 +102,8 @@ Version: 0.2.1
 Date: 2018-12-16
   Changes:
     - Pipe network membership is recalculated over multiple ticks, eliminating freezing when modifying very large networks.
-  Compatibility:
-    - Add compatibility with Advanced Underground Piping.
   Minor Features:
+    - Add compatibility with Advanced Underground Piping.
     - New debug option to show network IDs in underground view.
     - Underground pipe indicators are now extended as the player walks around the map.
     - Clarify console message when trying to build a connector on a surface where they are not allowed.
@@ -113,7 +114,7 @@ Date: 2018-12-02
     - Nearby undergound pipes are now indicated when holding an Underground pipe connector in the player's hand.  Implementation and graphics courtesy staplergun.
   Changes:
     - Rewrite based on common codebase with beltlayer.
-  Compatibility:
+  Minor Features:
     - Now compatible with PickerPipeTools.
   Bugfixes:
     - Fix crash on creating a blueprint with no entities. (https://mods.factorio.com/mod/pipelayer/discussion/5be0e8b9e5b68e000d9f18aa)
@@ -138,8 +139,13 @@ Date: 2018-10-25
     - Fixed crash if the editor surface already exists. (https://mods.factorio.com/mod/pipelayer/discussion/5bd37d9efd4ba8000daaff2e)
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.2
+<<<<<<< Updated upstream
 Date: 2018-10-25
   Localization:
+=======
+Date: 25.10.2018
+  Locale:
+>>>>>>> Stashed changes
     - Added Russian localization from John_TheCF.
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.1
