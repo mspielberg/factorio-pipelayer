@@ -2,7 +2,7 @@
   "name": "pipelayer",
   "title": "Pipelayer",
   "description": "Route your pipes freely underground.",
-  "factorio_version": "0.18",
+  "factorio_version": "1.1",
   "author": "Therax",
   "version": "0.4.5",
   "dependencies": [
