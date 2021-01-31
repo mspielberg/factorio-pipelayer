@@ -677,6 +677,13 @@ function Editor:on_script_raised_built(event)
   end
 end
 
+function Editor:on_script_raised_revive(event)
+  local entity = event.entity
+  if self:is_editor_surface(entity.surface) then
+    connect_underground_pipe(entity)
+  end
+end
+
 ---------------------------------------------------------------------------------------------------
 -- pipe marker rendering
 
