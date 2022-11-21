@@ -19,6 +19,9 @@ end
 local function make_proxy(proto)
   local proxy_proto = util.table.deepcopy(proto)
   proxy_proto.name = "pipelayer-bpproxy-"..proto.name
+  if proto.next_upgrade ~= nil then
+    proxy_proto.next_upgrade = "pipelayer-bpproxy-"..proto.next_upgrade
+  end
   proxy_proto.localised_name = {"entity-name.pipelayer-bpproxy", proto.localised_name or {"entity-name."..proto.name}}
   proxy_proto.collision_mask = {}
   proxy_proto.flags = {"player-creation"}
